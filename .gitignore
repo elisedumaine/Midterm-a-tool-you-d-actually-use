@@ -1,0 +1,22 @@
+# Unreal Engine generated data
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+ShaderTemp/
+
+# IDE and OS files
+.vs/
+.idea/
+*.sln
+*.VC.db
+*.VC.opendb
+*.suo
+*.user
+*.userprefs
+*.tmp
+*.log
+__pycache__/
+*.pyc
+Thumbs.db
+Desktop.ini

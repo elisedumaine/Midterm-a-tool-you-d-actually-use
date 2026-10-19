@@ -1,0 +1,18 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "Interactive World Builder",
+  "Description": "An Editor Utility Widget for generating a seeded, playable forest world.",
+  "Category": "World Building",
+  "CreatedBy": "Elise",
+  "CanContainContent": false,
+  "IsBetaVersion": true,
+  "Modules": [
+    {
+      "Name": "InteractiveWorldBuilderEditor",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
+    }
+  ]
+}
