@@ -44,13 +44,19 @@ These steps are enough for a classmate to run the project from a fresh clone.
    git clone https://github.com/elisedumaine/pfa-week06.git
    ```
 
-3. Open `InteractiveWorldBuilder.uproject` in the cloned folder. If Unreal asks to rebuild or enable project plugins, accept it.
-4. Let Unreal finish compiling shaders and loading the Third Person level.
-5. In the top menu, select **Tools -> Open Interactive World Builder**.
-6. Set a seed and the desired sliders, then click **Generate World**.
-7. Use Unreal's normal **Play** button to test the built-in Third Person character in the generated level.
+3. Extract `InteractiveWorldBuilder_Project.zip` into a new folder named `InteractiveWorldBuilder`:
 
-The selected Kenney Nature Kit assets are already included in `Content/WorldBuilder/Imported/Kenney`; no separate asset download is required.
+   ```powershell
+   Expand-Archive .\InteractiveWorldBuilder_Project.zip -DestinationPath .\InteractiveWorldBuilder
+   ```
+
+4. Open `InteractiveWorldBuilder\InteractiveWorldBuilder.uproject`. If Unreal asks to rebuild or enable project plugins, accept it.
+5. Let Unreal finish compiling shaders and loading the Third Person level.
+6. In the top menu, select **Tools -> Open Interactive World Builder**.
+7. Set a seed and the desired sliders, then click **Generate World**.
+8. Use Unreal's normal **Play** button to test the built-in Third Person character in the generated level.
+
+The archive includes the selected Kenney Nature Kit assets in `Content/WorldBuilder/Imported/Kenney`; no separate asset download is required.
 
 If the panel has an old layout after editing the Python file, fully close every Unreal Editor window and reopen this exact project. This reloads the Editor Utility Widget callbacks.
 
