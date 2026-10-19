@@ -33,9 +33,9 @@ This is **not a standalone app**. It lives inside **Unreal Engine 5.8** as an **
 - Visual polish is still being iterated: the user should choose a preferred seed, test Play mode, and capture the final generated result before grading.
 - After Python changes, Unreal must restart fully; otherwise it can keep an older widget callback in memory.
 
-## Install and run
+## First time in Unreal: install, open, generate, and play
 
-These steps are enough for a classmate to run the project from a fresh clone.
+Follow these steps in order. They assume the reader has never used Unreal before.
 
 1. Install **Unreal Engine 5.8** through the Epic Games Launcher on Windows.
 2. Clone this repository:
@@ -50,15 +50,29 @@ These steps are enough for a classmate to run the project from a fresh clone.
    Expand-Archive .\InteractiveWorldBuilder_Project.zip -DestinationPath .\InteractiveWorldBuilder
    ```
 
-4. Open `InteractiveWorldBuilder\InteractiveWorldBuilder.uproject`. If Unreal asks to rebuild or enable project plugins, accept it.
-5. Let Unreal finish compiling shaders and loading the Third Person level.
-6. In the top menu, select **Tools -> Open Interactive World Builder**.
-7. Set a seed and the desired sliders, then click **Generate World**.
-8. Use Unreal's normal **Play** button to test the built-in Third Person character in the generated level.
+4. Double-click `InteractiveWorldBuilder\InteractiveWorldBuilder.uproject`. If Windows asks which Unreal version to use, choose **5.8**. If Unreal asks to rebuild or enable project plugins, accept it.
+5. Wait until Unreal finishes loading the Third Person level and the bottom-right shader/loading messages have stopped. You should see a 3D view in the middle of the editor.
+6. In Unreal's top menu, click **Tools**, then click **Open Interactive World Builder**. A tool panel opens inside Unreal.
+7. In the panel, type a number in **Seed** (for example `20261018`). Move the tree, flower, rock, grass, terrain, and lighting sliders. Leave **Playable Character** checked.
+8. Click **Generate World** and wait for the new forest to appear in the 3D view. Do not click it repeatedly while Unreal is generating.
+
+### Play and move in the generated world
+
+1. At the top of Unreal, click the green triangle labelled **Play**. Make sure it says **Play**, not **Simulate**.
+2. Click once inside the game window so it receives keyboard input.
+3. Use **W**, **A**, **S**, and **D** to walk; move the mouse to look around; press **Spacebar** to jump.
+4. Press **Esc** to stop playing and return to the editor.
+5. To make a different world, change a slider or seed in the World Builder panel, click **Generate World** (or **Refresh Plants** for vegetation only), and press **Play** again.
+
+### If something is missing
+
+- The tool panel is not in the Content Drawer. Open it from **Tools -> Open Interactive World Builder**.
+- If the panel has an older layout after editing the Python script, close every Unreal Editor window and reopen this project. Unreal keeps Editor Utility Widget callbacks in memory until restart.
+- If a game window opens but the keyboard does nothing, click inside that game window once, then press **WASD**.
+- If Play starts in an unexpected place, return with **Esc**, make sure **Playable Character** is checked, generate again, then press Play.
 
 The archive includes the selected Kenney Nature Kit assets in `Content/WorldBuilder/Imported/Kenney`; no separate asset download is required.
 
-If the panel has an old layout after editing the Python file, fully close every Unreal Editor window and reopen this exact project. This reloads the Editor Utility Widget callbacks.
 
 ## Design choice: depth before breadth
 
