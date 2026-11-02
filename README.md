@@ -1,97 +1,117 @@
 # Interactive World Builder
 
-**PFA — Week 06 / Midterm project**  
-**Unreal Engine 5.8 · Editor Utility Widget · Python**
+**PFA Midterm: a tool you'd actually use**
+**Unreal Engine 5.8 · Editor Utility Widget · Python (+ a small C++ module for the play mode)**
 
-Interactive World Builder is an Unreal Editor tool for quickly building a small, playable stylized forest. Instead of placing each element by hand, an artist changes a few controls, keeps a seed, and regenerates the world from one panel.
+Interactive World Builder is an Unreal Editor tool that builds a small, playable stylized forest from one panel. Instead of placing terrain, trees, rocks, paths, and lights one at a time, an artist picks a seed and a few settings and clicks **Build World**. The same seed and settings always give back the same world.
+
+**Demo video (1–3 min):** _link coming: add the video URL here_
 
 ## Where the tool lives
 
-This is **not a standalone app**. It lives inside **Unreal Engine 5.8** as an **Editor Utility Widget**. It is used while editing a level; the Third Person template is used to test the generated world in Play mode.
+The tool is **not a standalone app**. It runs **inside Unreal Engine 5.8** as an **Editor Utility Widget**, a docked panel in the level editor. The Third Person template character lets you walk the generated world in Play mode.
 
-## What the tool does
+## The chore it ends
 
-- Generates a seeded forest world with terrain, trees, rocks, grass, flowers, lighting, sky color, and an optional Third Person player start.
-- Lets the user set a world name, seed, terrain size, tree/flower/rock/grass density, lighting intensity, color palette, and whether mountains are used.
-- Keeps placement intentional: trees avoid the main path and harsh terrain; rocks appear in small clusters; ground cover stays off the path.
-- Rebuilds just the vegetation layer with **Refresh Plants**, rather than recreating terrain and lighting.
-- Offers **Preview**, **Save Preset**, **Load Preset**, **Start Over**, **Reset**, and **Delete World** controls.
-- Removes the default Third Person template scenery while a generated world is active, then restores it when the generated world is deleted.
+Blocking out an early natural level by hand means placing the ground, the hills, the paths, hundreds of trees, rocks, plants, the lights, and a player start one by one. Trying a second version means doing it all again. This tool turns that work into a few settings and one button, so an artist can try ten forests in the time one used to take.
 
-## What works now
+## Install and run from a fresh clone
 
-- A functional Editor Utility Widget exposes the forest controls and actions listed above.
-- The forest generator supports deterministic seeds, density controls, a playable Third Person start, presets, preview, and safe generated-actor cleanup.
-- Vegetation is regenerated separately from terrain and lighting, so an artist can revise the plant layer without rebuilding the whole scene.
-- The project contains its Python scripts, enabled project settings, imported low-poly nature meshes, level, and documentation; it is small enough to clone without Git LFS.
+### What you need
 
-## What does not work yet / known limits
+- **Windows** with **Unreal Engine 5.8**, installed from the Epic Games Launcher.
+- **Visual Studio 2022** with the **Game development with C++** workload. The project has a small C++ module (`Source/ForestGame`, used for the animals, birds, and game HUD), and Unreal compiles it the first time the project opens.
+- Houdini is **not** needed (see [Optional: Houdini river](#optional-houdini-river)).
 
-- The polished production theme is **Forest**. Mountain, beach, and meadow are not complete, separate finished worlds yet.
-- The tool is an editor workflow, not a packaged game or a runtime in-game menu.
-- A PCG plugin is enabled in the project but the current iteration uses deterministic Python/editor placement rather than a finished authored PCG graph.
-- Visual polish is still being iterated: the user should choose a preferred seed, test Play mode, and capture the final generated result before grading.
-- After Python changes, Unreal must restart fully; otherwise it can keep an older widget callback in memory.
+### Steps
 
-## First time in Unreal: install, open, generate, and play
-
-Follow these steps in order. They assume the reader has never used Unreal before.
-
-1. Install **Unreal Engine 5.8** through the Epic Games Launcher on Windows.
-2. Clone this repository:
+1. Clone the repository:
 
    ```powershell
-   git clone https://github.com/elisedumaine/pfa-week06.git
+   git clone https://github.com/elisedumaine/Midterm-a-tool-you-d-actually-use.git
    ```
 
-3. Extract `InteractiveWorldBuilder_Project.zip` into a new folder named `InteractiveWorldBuilder`:
+2. Open the cloned folder and double-click `InteractiveWorldBuilder.uproject`. If Windows asks which Unreal version to use, choose **5.8**.
+3. Unreal says that some modules (ForestGame) are missing or built with a different engine version, and asks to rebuild them. Click **Yes**. The first build and the shader compile take a few minutes.
+4. When the editor is open, the **World Builder** panel opens by itself. If it does not, open it from the top menu: **Tools → Open Interactive World Builder**.
+5. Click the **Build** tab, then **Build World**. Wait until the forest appears in the viewport and the status line says *World built and saved*. Click it only once.
+6. Click the green **Play** button at the top, click once inside the game view, and walk with **W A S D**, look with the mouse, and jump with **Space**. Press **Esc** to stop.
 
-   ```powershell
-   Expand-Archive .\InteractiveWorldBuilder_Project.zip -DestinationPath .\InteractiveWorldBuilder
-   ```
+To make another world, change the seed or any setting, click **Build World** again (or **New plants** to change only the plant layer), then press **Play**.
 
-4. Double-click `InteractiveWorldBuilder\InteractiveWorldBuilder.uproject`. If Windows asks which Unreal version to use, choose **5.8**. If Unreal asks to rebuild or enable project plugins, accept it.
-5. Wait until Unreal finishes loading the Third Person level and the bottom-right shader/loading messages have stopped. You should see a 3D view in the middle of the editor.
-6. In Unreal's top menu, click **Tools**, then click **Open Interactive World Builder**. A tool panel opens inside Unreal.
-7. In the panel, type a number in **Seed** (for example `20261018`). Move the tree, flower, rock, grass, terrain, and lighting sliders. Leave **Playable Character** checked.
-8. Click **Generate World** and wait for the new forest to appear in the 3D view. Do not click it repeatedly while Unreal is generating.
+## What it does
 
-### Play and move in the generated world
+The panel has four tabs. Every choice is a large icon tile; there are no dropdowns.
 
-1. At the top of Unreal, click the green triangle labelled **Play**. Make sure it says **Play**, not **Simulate**.
-2. Click once inside the game window so it receives keyboard input.
-3. Use **W**, **A**, **S**, and **D** to walk; move the mouse to look around; press **Spacebar** to jump.
-4. Press **Esc** to stop playing and return to the editor.
-5. To make a different world, change a slider or seed in the World Builder panel, click **Generate World** (or **Refresh Plants** for vegetation only), and press **Play** again.
+- **World**: name, **Seed** (with **New** to pick a random one), season, color palette, world size, **Hills** (from flat to hilly), **Paths** (None, Trail, Network), and mountains around the world.
+- **Nature**: **Vegetation** (how much grows), **Forest cover** (woods versus open glades), Compact / Balanced / Lush profiles, a build estimate (how many trees, shrubs, rocks, and plants will be placed), and **Wildlife**.
+- **Mood**: **Time of day** (Golden hour, Sunset, Day, Blue hour), sun strength and warmth, sky and ground tint, **Haze**, **Sparkles**, **Weather** (Clear, Rain, Snow), and **Playable character**.
+- **Build**: **Build World**, **New plants**, presets (**Save**, **Load**, **Reset**), and **Delete World**. The status line stays visible under every tab.
 
-### If something is missing
+What the generator takes care of:
 
-- The tool panel is not in the Content Drawer. Open it from **Tools -> Open Interactive World Builder**.
-- If the panel has an older layout after editing the Python script, close every Unreal Editor window and reopen this project. Unreal keeps Editor Utility Widget callbacks in memory until restart.
-- If a game window opens but the keyboard does nothing, click inside that game window once, then press **WASD**.
-- If Play starts in an unexpected place, return with **Esc**, make sure **Playable Character** is checked, generate again, then press Play.
+- **Seeded and repeatable.** Every random choice comes from the seed, so a seed is a world you can come back to.
+- **Ground**: a low-poly relief with rolling ground, winding valleys, inner hills, and tall mountain ranges beyond the edge. Slopes steeper than 38° inside the playable area are softened so every valley stays walkable.
+- **Paths**: winding stepping-stone footpaths lined with lanterns, going around the hills. Trees, rocks, and plants stay off them.
+- **Ecology, not random scatter**: dense woods and open glades, young trees and shrubs on woodland edges, stumps, logs, and mushrooms under the trees, rocks in small clusters, and a carpet of grass and flowers so nothing looks bare. Trunks, rocks, and buildings keep their distance from each other. Ground cover uses instanced meshes, so thousands of tufts stay fast.
+- **Season and color are separate.** The season picks the tree species and the sun angle. The palette (Soft Dusk, Emberwild, Candy Cloud, Neon Night, Coral Lagoon, Golden Hour, Frost Violet, or Natural) is chosen on its own. Clicking a palette repaints the existing world, lights included, without rebuilding it.
+- **Instant mood changes**: time of day, light, haze, sparkles, and weather relight the current world when you let go of a slider. Rain makes surfaces dark and shiny, Snow whitens every upward face, and Clear dries everything again.
+- **New plants** regrows only the plant layer (trees, shrubs, flowers, grass, rocks, landmarks) and keeps the ground, paths, weather, and lighting. Each click gives a new layout on the same ground.
+- **Safe cleanup**: everything the tool makes is tagged. Rebuilding or **Delete World** only removes the tool's own actors. While a world is active, the template scenery is hidden; Delete World brings it back with the original sun, sky light, and player start.
+- **Ready to play**: the ground, trees, rocks, stumps, and lanterns have collision, and an invisible wall keeps the player inside. Grass, flowers, and shrubs can be walked through. **Build World** and **New plants** save the level, so closing Unreal never loses a world.
+- **Presets**: **Save** writes the current settings to `Saved/InteractiveWorldBuilderPreset.json`; **Load** brings them back.
 
-The archive includes the selected Kenney Nature Kit assets in `Content/WorldBuilder/Imported/Kenney`; no separate asset download is required.
+### Bonus: a small forest game in Play mode
 
+Every generated world is also a small game. Walk up to a red mushroom and press **E** to pick it. Animals (deer, bunnies, foxes, boars, beavers) are shy and run away from empty hands. Carry a mushroom and they come closer; press **E** next to one to feed it, and it follows you. Feed them all and they dance. Birds hop in the glades and fly off when you come close, and birdsong and forest ambience play around you.
 
-## Design choice: depth before breadth
+## What does not work yet
 
-The first finished environment is a forest rather than four shallow themes. The seed makes a result reproducible, and the vegetation refresh keeps terrain stable while the artist iterates on density. Those choices answer the main production problem: make fast variations without creating duplicate actors or losing a playable level.
+- Only one biome: a **forest** (four seasons, eight palettes). Mountain, beach, and meadow worlds are not built.
+- It is an **editor tool**, not a packaged game or an in-game menu.
+- The **PCG** plugin is enabled, but placement is done in Python, not with an authored PCG graph.
+- The **river** needs Houdini open at the same time. Without Houdini, Build World skips it and says *No river this time*.
+- After editing the Python code, Unreal must be **fully restarted**: it keeps the old panel callbacks in memory.
+- A wide world on **Lush** takes longer to build. The build estimate on the Nature tab shows how many trees, shrubs, rocks, and plants it will place.
 
-## Peer run - required before final submission
+## What I would build next
 
-**Classmate:** _Pending peer test - add the classmate's real name before submitting._
+1. **More biomes** on the same code: a meadow, a mountain, and a beach, each with its own species, ground, and palette.
+2. **Paint where things go**: brush a zone in the viewport (more forest here, a clearing there) instead of using only global sliders.
+3. **Move placement to a PCG graph** so artists can tweak the rules in Unreal's PCG editor without touching Python.
+4. **A Houdini river that works without opening Houdini**, cooked through Houdini Engine inside Unreal.
+5. **Preset library**: several named presets with a thumbnail of each world, instead of a single preset file.
 
-1. _Sentence 1: What they did to install and run the tool._
-2. _Sentence 2: What worked or did not work for them._
-3. _Sentence 3: One suggestion or observation about the interface/world._
+## Peer run (A6)
 
-The peer feedback must be written by an actual classmate. Send me their name and exact three sentences after the run, and I will add them here without inventing feedback.
+**Classmate:** _name_
+
+1. _What they did to install and run the tool._
+2. _What worked or did not work for them._
+3. _One suggestion or observation about the interface or the world._
+
+**What I fixed after the peer run:** _one line_
+
+## How it is built
+
+| Part | File | Role |
+| --- | --- | --- |
+| Generator and panel | `Content/Python/interactive_world_builder.py` | Builds the panel, reads its values, and generates the world (`_build_world`). Also handles New plants (`refresh_plants`), palettes, mood, presets, and cleanup. |
+| Startup | `Content/Python/init_unreal.py` | Unreal runs it when the project opens: it adds the **Tools** menu entry and opens the panel. |
+| River | `Content/Python/iwb_river.py` | Optional river along the valleys, made by Houdini through a local bridge. |
+| Play mode | `Source/ForestGame` | C++ actors: `AForestAnimal`, `AForestPickup`, `AForestGameManager`, `AForestHUD`, `AForestBirds`, `AForestAmbience`. |
+| Blueprints | `Content/WorldBuilder/Gameplay` | `BP_Deer`, `BP_Bunny`, `BP_Fox`, `BP_Boar`, `BP_Beaver`, `BP_MushroomPickup`, `BP_ForestBirds`, `BP_ForestAmbience`: model, animations, size, and speed of each. |
+| Panel art | `Tools/make_icons.py` | Draws the icons and palette swatches used in the panel. |
+| Dev helpers | `Tools/ue.py`, `Tools/houdini.py` | Send Python to the open Unreal editor or the open Houdini, from a terminal. |
+
+## Optional: Houdini river
+
+This part is **not needed** to run the tool. With Houdini 22.0 and Houdini Engine for Unreal installed, `Houdini/iwb_river.hda` builds a river and its streams along the generated valleys, and `Houdini/iwb_lowpoly_rock.hda` makes faceted low-poly rocks. The Houdini Engine plugin is disabled in `InteractiveWorldBuilder.uproject` so the project opens on machines without Houdini; set `"HoudiniEngine"` to `"Enabled": true` to use it.
 
 ## Assets and credit
 
-This project uses selected meshes from the **Kenney Nature Kit**, available under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Unreal Engine's Third Person template provides the test character and movement.
+- Meshes: **Kenney Nature Kit**, **Kenney Fantasy Town Kit**, and **Kenney Cube Pets** (animated animals), all [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). They are included in `Content/WorldBuilder/Imported`, so nothing has to be downloaded separately.
+- Sounds, CC0, from OpenGameArt.org: [Forest Ambience](https://opengameart.org/node/23888), [Ambient Bird Sounds](https://opengameart.org/content/ambient-bird-sounds) by isaiah658, [Bird chirping sounds](https://opengameart.org/content/bird-chirping-sounds) by syncopika, [Crows singing](https://opengameart.org/content/crows-singing).
+- Unreal Engine's Third Person template provides the test character and movement.
 
-## Submission evidence
-
-See [SUBMISSION_NOTES.md](SUBMISSION_NOTES.md) for the short demo plan and screenshots to capture before submission. The revised project pitch is in [MIDTERM_PITCH.md](MIDTERM_PITCH.md).
+See [MIDTERM_PITCH.md](MIDTERM_PITCH.md) for the original pitch and [SUBMISSION_NOTES.md](SUBMISSION_NOTES.md) for the demo plan.
