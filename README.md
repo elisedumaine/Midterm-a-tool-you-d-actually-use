@@ -1,6 +1,6 @@
 # Interactive World Builder
 
-**PFA Midterm: a tool you'd actually use**
+**Midterm — a tool you'd actually use**
 **Unreal Engine 5.8 · Editor Utility Widget · Python (+ a small C++ module for the play mode)**
 
 Interactive World Builder is an Unreal Editor tool that builds a small, playable stylized forest from one panel. Instead of placing terrain, trees, rocks, paths, and lights one at a time, an artist picks a seed and a few settings and clicks **Build World**. The same seed and settings always give back the same world.
