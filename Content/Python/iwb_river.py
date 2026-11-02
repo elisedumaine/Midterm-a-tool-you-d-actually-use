@@ -15,6 +15,7 @@ assertion in BakeAllOutputs), so the plugin is not used here.
 
     import iwb_river; iwb_river.build_river()
 """
+import glob
 import heapq
 import json
 import math
@@ -30,7 +31,7 @@ HDA_ASSET = "/Game/WorldBuilder/Houdini/iwb_river"
 BAKE_FOLDER = "/Game/WorldBuilder/Houdini/Baked"
 RIVER_MESH = BAKE_FOLDER + "/SM_IWB_River"
 BRIDGE_PORT = 18820
-BRIDGE_TOKEN = os.path.join(os.path.expanduser("~"), "Documents", "houdini22.0", "iwb_bridge_token.txt")
+BRIDGE_TOKENS = os.path.join(os.path.expanduser("~"), "Documents", "houdini*", "iwb_bridge_token.txt")
 MATERIALS = "/Game/WorldBuilder/Materials"
 RIVER_TAG = "IWB_River"
 SPACING = 350.0          # cm between two river points
@@ -153,18 +154,26 @@ def _bank(sample, d, step, slope):
     return level + slope * (d - max(width * WATER_HALF_WIDTH, step * CROSSING))
 
 
-def _carve(relief, samples, bed_depth=BED_DEPTH, slope=BANK_SLOPE, banks=True):
-    """Shape a bed under the water and banks that rise right at its edges.
+def _carve(relief, samples, bed_depth=BED_DEPTH, slope=BANK_SLOPE, banks=True, spare=()):
+    """Shape a bed under the water and low banks right at its edges.
 
     The ground grid is coarser than the river (one point every ~5.7 m), and
     the mesh interpolates linearly between points.  A flat bed dug below the
     water left the ribbon hovering over a wide trench; a V that crosses the
     water level at the water's edge stays right under linear interpolation.
+    Beside the water the ground is only lowered to a gentle slope, or raised
+    just above the water where it was too low: no ridge along the river.
+    spare: other water (streams) whose bed this carve must not fill in.
     """
     n, step, extent, heights = relief.cells, relief.cell, relief.half_extent, relief.heights
-    bucket = {}
-    for s in samples:
-        bucket.setdefault((int(s[0] // 1500), int(s[1] // 1500)), []).append(s)
+
+    def buckets(points):
+        found = {}
+        for s in points:
+            found.setdefault((int(s[0] // 1500), int(s[1] // 1500)), []).append(s)
+        return found
+
+    bucket, spared = buckets(samples), buckets(spare)
     changed = 0
     for j in range(n + 1):
         y = -extent + j * step
@@ -181,21 +190,24 @@ def _carve(relief, samples, bed_depth=BED_DEPTH, slope=BANK_SLOPE, banks=True):
                         # Beside a cascade, the bank must stand above the
                         # upper pool too, or the fall hangs in the air.
                         if d < max(s[3] * WATER_HALF_WIDTH, step * CROSSING) + step * 0.6:
-                            wall = max(wall if wall is not None else -1e30, _bank(s, d, step, slope))
+                            wall = max(wall if wall is not None else -1e30, s[2] + 10.0)
             if not near:
                 continue
             half = max(near[3] * WATER_HALF_WIDTH, step * CROSSING)
             if near_d >= near[3] * 1.7 + step:
+                continue
+            if any(math.hypot(x - s[0], y - s[1]) < max(s[3] * WATER_HALF_WIDTH, step * CROSSING)
+                   for dx in (-1, 0, 1) for dy in (-1, 0, 1) for s in spared.get((bx + dx, by + dy), ())):
                 continue
             h = heights[j][i]
             if near_d <= half:
                 target = max(_bank(near, near_d, step, slope), near[2] - bed_depth)
                 if not banks:
                     target = min(h, target)
-            elif banks and wall is not None:
-                target = wall
             else:
                 target = min(h, _bank(near, near_d, step, slope))
+                if banks and wall is not None:
+                    target = max(target, wall)
             if abs(target - h) > 0.5:
                 heights[j][i] = target
                 changed += 1
@@ -436,6 +448,22 @@ def _stream_routes(relief, samples, data):
     return streams
 
 
+def _join(stream, samples):
+    """End a stream at the river's edge, a hair above the river's water.
+
+    Running on into the river laid two water surfaces at the same height,
+    which flickered against each other.  The stream now stops where it meets
+    the river's surface, so it pours into it."""
+    joined = []
+    for x, y, level, width in stream:
+        river = min(samples, key=lambda s: math.hypot(x - s[0], y - s[1]))
+        inside = math.hypot(x - river[0], y - river[1]) < river[3] * WATER_HALF_WIDTH * 0.8
+        joined.append((x, y, max(level, river[2] + 4.0), width))
+        if inside and len(joined) > 1:
+            break
+    return joined
+
+
 def _stream_profile(relief, route, river_level):
     samples, level = [], None
     total = len(route)
@@ -640,8 +668,9 @@ def _houdini(code, timeout=300.0):
     """Run Python in the open Houdini through the IWB bridge; returns what it printed."""
     import socket
     try:
-        token = open(BRIDGE_TOKEN).read().strip()
-    except OSError:
+        # Any Houdini version: the bridge writes its token in its own prefs folder.
+        token = open(max(glob.glob(BRIDGE_TOKENS), key=os.path.getmtime)).read().strip()
+    except (OSError, ValueError):
         raise RuntimeError("Open Houdini first: the river is made by Houdini.")
     try:
         with socket.create_connection(("127.0.0.1", BRIDGE_PORT), timeout=5) as connection:
@@ -785,13 +814,13 @@ def build_river(save=True):
     before = [list(row) for row in relief.heights]
     carved = _carve(relief, samples)
     # Small streams from the hills: routed on the carved ground, carved in turn.
-    streams = [_stream_profile(relief, route, level)
+    streams = [_join(_stream_profile(relief, route, level), samples)
                for route, level in _stream_routes(relief, samples, data)]
     for stream in streams:
         carved += _carve(relief, stream, STREAM_BED, STREAM_SLOPE)
     # Carve the river again so a stream's banks never cover it where they meet.
     if streams:
-        carved += _carve(relief, samples)
+        carved += _carve(relief, samples, spare=[s for stream in streams for s in stream])
     w._ground_mesh(relief, terrain, w.GENERATED_TAG)
     # The carved relief is not the seed's relief: drop it from the cache so a
     # new Build World starts from the clean ground again.
