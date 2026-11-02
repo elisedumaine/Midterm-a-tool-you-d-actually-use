@@ -275,7 +275,10 @@ def _crossings(trails, waters):
                 if run and (item[0] is None or item[0] != run[-1][0] + 1):
                     first, last = run[0][0], run[-1][0]
                     if first > 0 and last < len(points) - 1:
-                        found.append((points[first - 1], points[last + 1], run[len(run) // 2][1], trail["width"]))
+                        # The deck must clear the highest water under it (a stream slopes).
+                        mid = run[len(run) // 2][1]
+                        top = max(item[1][2] for item in run)
+                        found.append((points[first - 1], points[last + 1], (mid[0], mid[1], top, mid[3]), trail["width"]))
                     run = []
                 if item[0] is not None:
                     run.append(item)
@@ -293,7 +296,7 @@ def _bridge(batches, relief, start, end, water, path_width, palette):
     za, zb = relief.height(ax, ay), relief.height(bx, by)
     big = water[3] > 300.0
     deck_width = 170.0 if big else 120.0
-    arch = max(25.0, water[2] + 45.0 - (za + zb) * 0.5) if big else 15.0
+    arch = max(25.0, water[2] + 45.0 - (za + zb) * 0.5) if big else max(15.0, water[2] + 30.0 - (za + zb) * 0.5)
     paint = w._paint(palette, "trunk")
     across = (-math.sin(heading), math.cos(heading))
 
