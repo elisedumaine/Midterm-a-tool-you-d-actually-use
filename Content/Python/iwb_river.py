@@ -39,11 +39,11 @@ BED_DEPTH = 80.0
 STEP_HEIGHT = 170.0      # height of one cascade step on steep ground
 STREAMS = 3              # small streams that run down the hills into the river
 STREAM_SPACING = 220.0
-STREAM_STEP = 70.0       # their little falls
+STREAM_FALL = 100.0      # a stream draws a little fall only where it drops this much at once
 STREAM_BED = 35.0
 WATER_HALF_WIDTH = 0.42  # the water ribbon is 0.85 x width wide (see _cook_in_houdini)
 BANK_SLOPE = 0.2         # rise of the bed and banks per cm away from the water's edge
-STREAM_SLOPE = 0.12
+STREAM_SLOPE = 0.08        # gentler: a narrow stream sits far inside a grid cell
 CROSSING = 0.75          # x grid cell: no ground point is farther than this from a water line
 
 
@@ -160,7 +160,6 @@ def _carve(relief, samples, bed_depth=BED_DEPTH, slope=BANK_SLOPE, banks=True):
     the mesh interpolates linearly between points.  A flat bed dug below the
     water left the ribbon hovering over a wide trench; a V that crosses the
     water level at the water's edge stays right under linear interpolation.
-    banks=False only lowers the ground (small streams must not bury the river).
     """
     n, step, extent, heights = relief.cells, relief.cell, relief.half_extent, relief.heights
     bucket = {}
@@ -444,10 +443,10 @@ def _stream_profile(relief, route, river_level):
         target = relief.height(x, y) - 15.0
         if level is None:
             level = target
-        steep = (level - target) / STREAM_SPACING > 0.15
+        # The water slides down with the ground.  A staircase of flat pools
+        # (one 70 cm step every few metres) cannot be followed by the 5.7 m
+        # ground grid: every pool's lower end hung in the air.
         level = max(river_level, min(level, target))
-        if steep and level > river_level + STREAM_STEP:
-            level = max(river_level, math.floor(level / STREAM_STEP) * STREAM_STEP)
         t = index / max(1, total - 1)
         samples.append((x, y, level, 120.0 + 110.0 * t))
     return samples
@@ -754,10 +753,10 @@ def build_river(save=True):
     before = [list(row) for row in relief.heights]
     carved = _carve(relief, samples)
     # Small streams from the hills: routed on the carved ground, carved in turn.
-    streams = [_sharpen_falls(_stream_profile(relief, route, level), STREAM_STEP * 0.6)
+    streams = [_stream_profile(relief, route, level)
                for route, level in _stream_routes(relief, samples, data)]
     for stream in streams:
-        carved += _carve(relief, stream, STREAM_BED, STREAM_SLOPE, banks=False)
+        carved += _carve(relief, stream, STREAM_BED, STREAM_SLOPE)
     # Carve the river again so a stream's banks never cover it where they meet.
     if streams:
         carved += _carve(relief, samples)
@@ -773,7 +772,7 @@ def build_river(save=True):
     bridges = _build_bridges(relief, data, [samples] + streams, palette)
     result = _cook_in_houdini(samples, data["seed"])
     for number, stream in enumerate(streams):
-        part = _cook_in_houdini(stream, int(data["seed"]) + number + 1, STREAM_STEP * 0.6)
+        part = _cook_in_houdini(stream, int(data["seed"]) + number + 1, STREAM_FALL)
         result["prims"] += part["prims"]
         result["falls"] += part["falls"]
     actor = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).spawn_actor_from_object(
