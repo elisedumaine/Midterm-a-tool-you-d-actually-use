@@ -40,6 +40,7 @@ BED_DEPTH = 80.0
 STEP_HEIGHT = 170.0      # height of one cascade step on steep ground
 STREAMS = 3              # small streams that run down the hills into the river
 STREAM_SPACING = 220.0
+STREAM_MAX_SLOPE = 0.1   # average drop per cm of a stream, spring to river
 STREAM_FALL = 100.0      # a stream draws a little fall only where it drops this much at once
 STREAM_BED = 35.0
 WATER_HALF_WIDTH = 0.42  # the water ribbon is 0.85 x width wide (see _cook_in_houdini)
@@ -438,7 +439,9 @@ def _stream_routes(relief, samples, data):
             if any(math.hypot(sx - ux, sy - uy) < 2500.0 for ux, uy in used):
                 continue
             rise = relief.height(sx, sy) - level
-            if rise > 100.0 and (best is None or rise > best[0]):
+            # A brook, not a slide: keep the average slope gentle (at most 1 in 10),
+            # then take the highest spring that allows.
+            if 100.0 < rise < reach * STREAM_MAX_SLOPE and (best is None or rise > best[0]):
                 best = (rise, sx, sy)
         if not best:
             continue
@@ -791,6 +794,194 @@ def _river_mesh(result):
     return asset
 
 
+# ---------------------------------------------------------------- atmosphere
+SOUND_RATE = 22050
+FALL_MIN_DROP = 90.0     # cm: smaller steps get no mist or roar of their own
+
+
+def _write_wav(path, samples):
+    import struct
+    import wave
+    with wave.open(path, "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(SOUND_RATE)
+        handle.writeframes(b"".join(struct.pack("<h", int(max(-1.0, min(1.0, s)) * 30000)) for s in samples))
+
+
+def _seamless(samples, fade):
+    """Cross-fade the end into the start so the loop has no click."""
+    n = len(samples) - fade
+    out = samples[:n]
+    for i in range(fade):
+        t = i / float(fade)
+        out[i] = samples[i] * t + samples[n + i] * (1.0 - t)
+    return out
+
+
+def _synth_waterfall(seconds=8.0, seed=11):
+    """Roaring white water: deep brown noise, a hiss on top, slow surges."""
+    rng = random.Random(seed)
+    count = int(seconds * SOUND_RATE)
+    low = mid = 0.0
+    out = []
+    for i in range(count):
+        white = rng.uniform(-1.0, 1.0)
+        low = 0.995 * low + 0.05 * white
+        mid = 0.9 * mid + 0.1 * white
+        t = i / float(SOUND_RATE)
+        surge = 1.0 + 0.18 * math.sin(t * 2.0 * math.pi * 0.25) + 0.08 * math.sin(t * 2.0 * math.pi * 0.9)
+        out.append((low * 1.4 + mid * 0.9 + white * 0.12) * 0.55 * surge)
+    return _seamless(out, SOUND_RATE // 2)
+
+
+def _synth_river(seconds=8.0, seed=23):
+    """A brook: soft rushing noise and many small rising bubbles."""
+    rng = random.Random(seed)
+    count = int(seconds * SOUND_RATE)
+    out, low = [], 0.0
+    for i in range(count):
+        white = rng.uniform(-1.0, 1.0)
+        low = 0.97 * low + 0.03 * white
+        out.append(low * 1.6 + white * 0.03)
+    for _ in range(int(seconds * 14)):
+        start = rng.randrange(count - 2000)
+        f0, length = rng.uniform(350.0, 1100.0), rng.randint(500, 1500)
+        amp, phase = rng.uniform(0.05, 0.16), 0.0
+        for k in range(length):
+            t = k / float(length)
+            phase += 2.0 * math.pi * f0 * (1.0 + 0.7 * t) / SOUND_RATE
+            out[start + k] += amp * math.sin(phase) * math.exp(-5.0 * t) * min(1.0, k / 40.0)
+    return _seamless(out, SOUND_RATE // 2)
+
+
+def _water_sound(name, synth):
+    """A looping water sound, synthesised once into a WAV and imported."""
+    path = "{}/{}".format(w.AUDIO_DESTINATION, name)
+    sound = unreal.load_asset(path)
+    if not sound:
+        folder = os.path.join(unreal.Paths.project_intermediate_dir(), "WorldBuilderWater")
+        os.makedirs(folder, exist_ok=True)
+        wav = os.path.join(folder, name + ".wav")
+        _write_wav(wav, synth())
+        task = unreal.AssetImportTask()
+        for key, value in (("filename", wav), ("destination_path", w.AUDIO_DESTINATION), ("destination_name", name),
+                           ("automated", True), ("replace_existing", True), ("save", True)):
+            task.set_editor_property(key, value)
+        unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+        sound = unreal.load_asset(path)
+    if sound:
+        sound.set_editor_property("looping", True)
+        unreal.EditorAssetLibrary.save_loaded_asset(sound, False)
+    return sound
+
+
+def _water_attenuation():
+    """Water is heard within about 35 m of where it falls or runs."""
+    path = w.AUDIO_DESTINATION + "/ATT_Water"
+    attenuation = unreal.load_asset(path)
+    if attenuation:
+        return attenuation
+    attenuation = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+        "ATT_Water", w.AUDIO_DESTINATION, unreal.SoundAttenuation, unreal.SoundAttenuationFactory())
+    settings = attenuation.get_editor_property("attenuation")
+    for prop, value in (("falloff_distance", 3500.0), ("spatialize", True), ("attenuate", True)):
+        w._set_first(settings, (prop, "b" + prop), value)
+    radius = settings.get_editor_property("attenuation_shape_extents")
+    settings.set_editor_property("attenuation_shape_extents", unreal.Vector(300.0, radius.y, radius.z))
+    attenuation.set_editor_property("attenuation", settings)
+    unreal.EditorAssetLibrary.save_loaded_asset(attenuation, False)
+    return attenuation
+
+
+def _falls(samples):
+    """Foot of every real cascade: (x, y, foot level, width, drop); close steps merge."""
+    found = []
+    for a, b in zip(samples, samples[1:]):
+        drop = a[2] - b[2]
+        if drop < STEP_HEIGHT * 0.5:
+            continue
+        if found and math.hypot(b[0] - found[-1][0], b[1] - found[-1][1]) < 900.0:
+            _x, _y, _level, width, total = found[-1]
+            found[-1] = (b[0], b[1], b[2], max(width, b[3]), total + drop)
+        else:
+            found.append((b[0], b[1], b[2], b[3], drop))
+    return [f for f in found if f[4] >= FALL_MIN_DROP]
+
+
+def _tag_river(actor, label):
+    actor.set_editor_property("tags", [unreal.Name(w.GENERATED_TAG), unreal.Name(RIVER_TAG)])
+    actor.set_actor_label(label)
+
+
+def _mist(x, y, z, scale, density, glow):
+    """A local fog volume: a soft sphere of mist, 5 m radius at scale 1."""
+    actor = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).spawn_actor_from_class(
+        unreal.LocalFogVolume, unreal.Vector(x, y, z), unreal.Rotator())
+    actor.set_actor_scale3d(unreal.Vector(*scale))
+    fog = actor.get_component_by_class(unreal.LocalFogVolumeComponent)
+    fog.set_editor_property("radial_fog_extinction", density)
+    fog.set_editor_property("height_fog_extinction", 0.0)
+    fog.set_editor_property("fog_albedo", unreal.LinearColor(0.92, 0.96, 1.0, 1.0))
+    fog.set_editor_property("fog_emissive", unreal.LinearColor(glow, glow * 1.04, glow * 1.1, 1.0))
+    fog.set_editor_property("fog_phase_g", 0.6)
+    return actor
+
+
+def _sound_at(x, y, z, sound, volume, label):
+    actor = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).spawn_actor_from_class(
+        unreal.AmbientSound, unreal.Vector(x, y, z), unreal.Rotator())
+    _tag_river(actor, label)
+    audio = actor.get_editor_property("audio_component")
+    audio.set_sound(sound)
+    audio.set_volume_multiplier(volume)
+    audio.set_editor_property("attenuation_settings", _water_attenuation())
+    audio.set_editor_property("auto_activate", True)
+    return actor
+
+
+def _build_atmosphere(river, streams, terrain):
+    """Spray mist and the roar of water at each cascade; along the river, a
+    thin mist lying on the water and the sound of the current."""
+    roar = _water_sound("S_Waterfall", _synth_waterfall)
+    brook = _water_sound("S_River", _synth_river)
+    inside = terrain * 0.5 * 0.97
+    falls = 0
+    for samples, big in [(river, True)] + [(stream, False) for stream in streams]:
+        for x, y, level, width, drop in _falls(samples):
+            size = max(1.0, width / 450.0 + drop / 500.0) * (1.0 if big else 0.6)
+            _tag_river(_mist(x, y, level + 120.0 * size, (size, size, size * 0.8), 0.15 if big else 0.1, 0.03),
+                       "IWB_CascadeMist")
+            if roar and math.hypot(x, y) < inside:
+                _sound_at(x, y, level + 100.0, roar, min(1.0, 0.35 + drop / 600.0) * (1.0 if big else 0.6), "IWB_CascadeSound")
+            falls += 1
+    along = [s for s in river if math.hypot(s[0], s[1]) < inside * 1.4]
+    for index in range(0, len(along), 8):
+        x, y, level, width = along[index]
+        nxt = along[min(len(along) - 1, index + 1)]
+        heading = math.degrees(math.atan2(nxt[1] - y, nxt[0] - x))
+        mist = _mist(x, y, level + 40.0, (2.4, max(0.7, width / 600.0), 0.3), 0.03, 0.01)
+        mist.set_actor_rotation(unreal.Rotator(0.0, 0.0, heading), False)
+        _tag_river(mist, "IWB_RiverMist")
+        if brook and index % 16 == 0:
+            _sound_at(x, y, level + 60.0, brook, 0.55, "IWB_RiverSound")
+    for stream in streams:
+        x, y, level, width = stream[len(stream) // 2]
+        if brook and math.hypot(x, y) < inside:
+            _sound_at(x, y, level + 40.0, brook, 0.35, "IWB_StreamSound")
+    return falls
+
+
+def _surface(relief, samples, lift=6.0):
+    """Never let the ground cover the water: where the carved ground still
+    rises above the water line, the water rises with it (and the water
+    upstream with it, so it never climbs going downstream)."""
+    levels = [max(level, relief.height(x, y) + lift) for x, y, level, width in samples]
+    for i in range(len(levels) - 2, -1, -1):
+        levels[i] = max(levels[i], levels[i + 1])
+    return [(x, y, level, width) for (x, y, _old, width), level in zip(samples, levels)]
+
+
 # ---------------------------------------------------------------- entry point
 def remove_river():
     for actor in _actors():
@@ -825,6 +1016,10 @@ def build_river(save=True):
     if streams:
         carved += _carve(relief, samples, spare=[s for stream in streams for s in stream])
     w._ground_mesh(relief, terrain, w.GENERATED_TAG)
+    # Where the coarse ground still covers the water, raise the water instead:
+    # a river that dips under the ground looked cut into pieces.
+    samples = _surface(relief, samples)
+    streams = [_surface(relief, stream) for stream in streams]
     # The carved relief is not the seed's relief: drop it from the cache so a
     # new Build World starts from the clean ground again.
     w._relief_cache.clear()
@@ -846,12 +1041,13 @@ def build_river(save=True):
     component = actor.get_component_by_class(unreal.StaticMeshComponent)
     component.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
     component.set_editor_property("cast_shadow", False)
+    misty = _build_atmosphere(samples, streams, terrain)
     if save:
         unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
     message = "River ready: {} m of water, {} small streams, {} cascades and {} bridges.".format(
         length, len(streams), result["falls"], bridges)
-    unreal.log("IWB river: {} ({} faces, {} plants cleared, {} moved with the ground, {} ground points carved)".format(
-        message, len(result["prims"]), removed, moved, carved))
+    unreal.log("IWB river: {} ({} faces, {} plants cleared, {} moved with the ground, {} ground points carved, {} misty cascades)".format(
+        message, len(result["prims"]), removed, moved, carved, misty))
     if panel:
         w._status(panel[0], message)
     return message
