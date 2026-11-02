@@ -51,6 +51,12 @@ PAINT_PREFIX, TRUNK_PREFIX, STEM_PREFIX = "IWB_Paint_", "IWB_Trunk_", "IWB_Stem_
 # Everything Refresh Plants is allowed to replace.  Terrain, path, cliffs,
 # weather, lighting, and the player start are deliberately absent.
 PLANT_LAYERS = (TREE_TAG, ROCK_TAG, GRASS_TAG, FLOWER_TAG, LANDMARK_TAG, GAMEPLAY_TAG)
+# Instanced ground cover: (fade start, fade end) in cm, 0 = never fades.  All cast no shadow.
+GROUND_COVER_FADE = (
+    ("IWB_FineGrass", (2500.0, 4000.0)), ("IWB_Pebbles", (2500.0, 4000.0)),
+    ("IWB_Flower", (3500.0, 5500.0)), ("IWB_Grass", (3500.0, 5500.0)), ("IWB_Plants", (3500.0, 5500.0)),
+    ("IWB_Mushrooms", (3000.0, 4500.0)), ("IWB_SmallRocks", (4500.0, 7000.0)), ("IWB_Path", (0.0, 0.0)),
+)
 PRESET_FILENAME = "InteractiveWorldBuilderPreset.json"
 LAST_BUILD_FILENAME = "InteractiveWorldBuilderLastBuild.json"
 TEMPLATE_STATE_FILENAME = "InteractiveWorldBuilderTemplateState.json"
@@ -2744,6 +2750,14 @@ def _spawn_instances(mesh, transforms, generated_tag, layer, label, tint=None, t
         instances.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
     if not visible:
         instances.set_visibility(False, True)
+    # Ground cover is thousands of tiny meshes: with a shadow each and no
+    # draw distance, they made Play mode crawl.  They fade out with distance
+    # (start, end in cm) and cast no shadow; nobody sees a pebble's shadow.
+    fade = next((distances for key, distances in GROUND_COVER_FADE if key in label), None)
+    if fade:
+        shadow = False
+        if fade[1] > 0:
+            instances.set_cull_distances(fade[0], fade[1])
     if not shadow:
         instances.set_cast_shadow(False)
     instances.add_instances(transforms, False, True)
