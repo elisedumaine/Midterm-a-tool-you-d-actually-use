@@ -491,7 +491,7 @@ def _stream_profile(relief, route, river_level):
 
 
 # ---------------------------------------------------------------- materials
-MATERIAL_VERSION = "river-5"
+MATERIAL_VERSION = "river-6"
 
 
 def _material(name, build):
@@ -535,9 +535,29 @@ def _drifting_noise(lib, material, x, y, stretch, drift, scale, levels):
     position = _node(lib, material, unreal.MaterialExpressionAdd, x - 300, y + 80)
     lib.connect_material_expressions(stretched, "", position, "A")
     lib.connect_material_expressions(moved, "", position, "B")
-    noise = _node(lib, material, unreal.MaterialExpressionNoise, x - 150, y + 80, scale=scale, levels=levels,
-                  output_min=0.0, output_max=1.0, turbulence=False, quality=1)
-    lib.connect_material_expressions(position, "", noise, "World Position")
+    # A tiling noise texture instead of the procedural Noise node: the same
+    # soft look for a fraction of the cost per pixel (the river lagged).
+    if stretch[2] == 0.0:
+        uv = _node(lib, material, unreal.MaterialExpressionComponentMask, x - 200, y + 80, r=True, g=True, b=False, a=False)
+        lib.connect_material_expressions(position, "", uv, "")
+    else:
+        across_xy = _node(lib, material, unreal.MaterialExpressionComponentMask, x - 230, y + 40, r=True, g=True, b=False, a=False)
+        lib.connect_material_expressions(position, "", across_xy, "")
+        across = _node(lib, material, unreal.MaterialExpressionDotProduct, x - 200, y + 40)
+        lib.connect_material_expressions(across_xy, "", across, "A")
+        lib.connect_material_expressions(_node(lib, material, unreal.MaterialExpressionConstant2Vector, x - 260, y, r=1.0, g=1.0), "", across, "B")
+        down = _node(lib, material, unreal.MaterialExpressionComponentMask, x - 230, y + 140, r=False, g=False, b=True, a=False)
+        lib.connect_material_expressions(position, "", down, "")
+        uv = _node(lib, material, unreal.MaterialExpressionAppendVector, x - 170, y + 80)
+        lib.connect_material_expressions(across, "", uv, "A")
+        lib.connect_material_expressions(down, "", uv, "B")
+    scaled = _node(lib, material, unreal.MaterialExpressionMultiply, x - 120, y + 80, const_b=scale / 20.0)
+    lib.connect_material_expressions(uv, "", scaled, "A")
+    sample = _node(lib, material, unreal.MaterialExpressionTextureSample, x - 60, y + 80,
+                   texture=unreal.load_asset("/Engine/EngineMaterials/Good64x64TilingNoiseHighFreq"))
+    lib.connect_material_expressions(scaled, "", sample, "UVs")
+    noise = _node(lib, material, unreal.MaterialExpressionComponentMask, x, y + 80, r=True, g=False, b=False, a=False)
+    lib.connect_material_expressions(sample, "", noise, "")
     return noise
 
 
@@ -945,8 +965,8 @@ def _sound_at(x, y, z, sound, volume, label):
 
 
 def _build_atmosphere(river, streams, terrain):
-    """Spray mist and the roar of water at each cascade; along the river, a
-    thin mist lying on the water and the sound of the current."""
+    """Spray mist and the roar of water at each cascade; along the river and
+    the streams, the sound of the current."""
     roar = _water_sound("S_Waterfall", _synth_waterfall)
     brook = _water_sound("S_River", _synth_river)
     inside = terrain * 0.5 * 0.97
@@ -959,15 +979,11 @@ def _build_atmosphere(river, streams, terrain):
             if roar and math.hypot(x, y) < inside:
                 _sound_at(x, y, level + 100.0, roar, min(1.0, 0.35 + drop / 600.0) * (1.0 if big else 0.6), "IWB_CascadeSound")
             falls += 1
+    # The sound of the current every ~50 m.  (A mist lying along the whole
+    # river cost too much frame time for what it added.)
     along = [s for s in river if math.hypot(s[0], s[1]) < inside * 1.4]
-    for index in range(0, len(along), 8):
-        x, y, level, width = along[index]
-        nxt = along[min(len(along) - 1, index + 1)]
-        heading = math.degrees(math.atan2(nxt[1] - y, nxt[0] - x))
-        mist = _mist(x, y, level + 40.0, (2.4, max(0.7, width / 600.0), 0.3), 0.25, 0.05)
-        mist.set_actor_rotation(unreal.Rotator(0.0, 0.0, heading), False)
-        _tag_river(mist, "IWB_RiverMist")
-        if brook and index % 16 == 0:
+    for x, y, level, width in along[::16]:
+        if brook:
             _sound_at(x, y, level + 60.0, brook, 0.55, "IWB_RiverSound")
     for stream in streams:
         x, y, level, width = stream[len(stream) // 2]

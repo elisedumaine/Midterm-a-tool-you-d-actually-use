@@ -108,7 +108,7 @@ Every generated world is also a small game. Walk up to a red mushroom and press 
 
 This part is **not needed** to run the tool. Without Houdini you get the whole forest; the river is the only thing missing.
 
-With Houdini open, every **Build World** also makes a river that follows the new valleys, with gentle side streams, cascades with spray mist and the roar of falling water, a thin mist lying on the river and the sound of the current, foam, boulders, and wooden bridges where the paths cross. Unreal finds the route and carves the bed into the ground; `Houdini/iwb_river.hda` turns the route into the water mesh; Unreal saves it as an ordinary static mesh, so Play mode never needs Houdini.
+With Houdini open, every **Build World** also makes a river that follows the new valleys, with gentle side streams, cascades with spray mist and the roar of falling water, the sound of the current, foam, boulders, and wooden bridges where the paths cross. Unreal finds the route and carves the bed into the ground; `Houdini/iwb_river.hda` turns the route into the water mesh; Unreal saves it as an ordinary static mesh, so Play mode never needs Houdini.
 
 To get the river on your computer:
 
