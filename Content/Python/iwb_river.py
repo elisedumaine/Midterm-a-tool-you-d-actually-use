@@ -450,6 +450,10 @@ def _stream_routes(relief, samples, data):
         # End inside the river, so the stream visibly pours into it.
         inner = (jx - nx * width * 0.25, jy - ny * width * 0.25)
         route = w._catmull_rom(_grid_path(relief, (sx, sy), inner, 8), STREAM_SPACING)
+        # Two streams in one bed showed one water floating over the other:
+        # a stream whose path runs into an earlier one is left out.
+        if any(math.hypot(x - ox, y - oy) < 700.0 for x, y in route for other, _l in streams for ox, oy in other):
+            continue
         streams.append((route, level))
     return streams
 
@@ -950,7 +954,7 @@ def _build_atmosphere(river, streams, terrain):
     for samples, big in [(river, True)] + [(stream, False) for stream in streams]:
         for x, y, level, width, drop in _falls(samples):
             size = max(1.0, width / 450.0 + drop / 500.0) * (1.0 if big else 0.6)
-            _tag_river(_mist(x, y, level + 120.0 * size, (size, size, size * 0.8), 0.15 if big else 0.1, 0.03),
+            _tag_river(_mist(x, y, level + 120.0 * size, (size, size, size * 0.8), 1.5 if big else 1.0, 0.2),
                        "IWB_CascadeMist")
             if roar and math.hypot(x, y) < inside:
                 _sound_at(x, y, level + 100.0, roar, min(1.0, 0.35 + drop / 600.0) * (1.0 if big else 0.6), "IWB_CascadeSound")
@@ -960,7 +964,7 @@ def _build_atmosphere(river, streams, terrain):
         x, y, level, width = along[index]
         nxt = along[min(len(along) - 1, index + 1)]
         heading = math.degrees(math.atan2(nxt[1] - y, nxt[0] - x))
-        mist = _mist(x, y, level + 40.0, (2.4, max(0.7, width / 600.0), 0.3), 0.03, 0.01)
+        mist = _mist(x, y, level + 40.0, (2.4, max(0.7, width / 600.0), 0.3), 0.25, 0.05)
         mist.set_actor_rotation(unreal.Rotator(0.0, 0.0, heading), False)
         _tag_river(mist, "IWB_RiverMist")
         if brook and index % 16 == 0:
