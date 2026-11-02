@@ -448,12 +448,12 @@ def _stream_profile(relief, route, river_level):
         # ground grid: every pool's lower end hung in the air.
         level = max(river_level, min(level, target))
         t = index / max(1, total - 1)
-        samples.append((x, y, level, 120.0 + 110.0 * t))
+        samples.append((x, y, level, 190.0 + 130.0 * t))
     return samples
 
 
 # ---------------------------------------------------------------- materials
-MATERIAL_VERSION = "river-3"
+MATERIAL_VERSION = "river-4"
 
 
 def _material(name, build):
@@ -480,18 +480,49 @@ def _node(lib, material, cls, x, y, **props):
 
 
 def _water(material, lib):
+    """Opaque teal water with bright glints drifting over it, so it reads as
+    moving water at a glance (two crossed wave bands that slide with time)."""
     colour = _node(lib, material, unreal.MaterialExpressionVectorParameter, -500, 0, parameter_name="Color",
-                   default_value=unreal.LinearColor(0.035, 0.20, 0.24, 1.0))
-    lib.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    glow = _node(lib, material, unreal.MaterialExpressionMultiply, -300, 120, const_b=0.12)
-    lib.connect_material_expressions(colour, "", glow, "A")
+                   default_value=unreal.LinearColor(0.05, 0.30, 0.40, 1.0))
+    world = _node(lib, material, unreal.MaterialExpressionWorldPosition, -1300, 200)
+    xy = _node(lib, material, unreal.MaterialExpressionComponentMask, -1150, 200, r=True, g=True, b=False, a=False)
+    lib.connect_material_expressions(world, "", xy, "")
+    time = _node(lib, material, unreal.MaterialExpressionTime, -1150, 420)
+    bands = []
+    for row, (kx, ky, speed) in enumerate(((0.021, 0.008, 1.6), (-0.009, 0.019, -1.2))):
+        along = _node(lib, material, unreal.MaterialExpressionDotProduct, -1000, 120 + row * 200)
+        lib.connect_material_expressions(xy, "", along, "A")
+        lib.connect_material_expressions(_node(lib, material, unreal.MaterialExpressionConstant2Vector, -1150, 60 + row * 200, r=kx, g=ky), "", along, "B")
+        moving = _node(lib, material, unreal.MaterialExpressionMultiply, -1000, 200 + row * 200, const_b=speed)
+        lib.connect_material_expressions(time, "", moving, "A")
+        phase = _node(lib, material, unreal.MaterialExpressionAdd, -880, 150 + row * 200)
+        lib.connect_material_expressions(along, "", phase, "A")
+        lib.connect_material_expressions(moving, "", phase, "B")
+        wave = _node(lib, material, unreal.MaterialExpressionSine, -780, 150 + row * 200)
+        lib.connect_material_expressions(phase, "", wave, "")
+        crest = _node(lib, material, unreal.MaterialExpressionAbs, -680, 150 + row * 200)
+        lib.connect_material_expressions(wave, "", crest, "")
+        bands.append(crest)
+    both = _node(lib, material, unreal.MaterialExpressionMultiply, -560, 250)
+    lib.connect_material_expressions(bands[0], "", both, "A")
+    lib.connect_material_expressions(bands[1], "", both, "B")
+    glint = _node(lib, material, unreal.MaterialExpressionPower, -450, 250, const_exponent=10.0)
+    lib.connect_material_expressions(both, "", glint, "Base")
+    white = _node(lib, material, unreal.MaterialExpressionConstant3Vector, -450, -100, constant=unreal.LinearColor(0.85, 0.95, 1.0, 1.0))
+    base = _node(lib, material, unreal.MaterialExpressionLinearInterpolate, -300, 0)
+    lib.connect_material_expressions(colour, "", base, "A")
+    lib.connect_material_expressions(white, "", base, "B")
+    lib.connect_material_expressions(glint, "", base, "Alpha")
+    lib.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    glow = _node(lib, material, unreal.MaterialExpressionMultiply, -150, 120, const_b=0.25)
+    lib.connect_material_expressions(base, "", glow, "A")
     lib.connect_material_property(glow, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
-    lib.connect_material_property(_node(lib, material, unreal.MaterialExpressionConstant, -300, 240, r=0.04), "", unreal.MaterialProperty.MP_ROUGHNESS)
-    lib.connect_material_property(_node(lib, material, unreal.MaterialExpressionConstant, -300, 320, r=1.0), "", unreal.MaterialProperty.MP_SPECULAR)
+    lib.connect_material_property(_node(lib, material, unreal.MaterialExpressionConstant, -300, 340, r=0.05), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    lib.connect_material_property(_node(lib, material, unreal.MaterialExpressionConstant, -300, 420, r=1.0), "", unreal.MaterialProperty.MP_SPECULAR)
 
 
 def _cascade(material, lib):
-    """A see-through curtain of water: pale blue, with thin bright threads
+    """A curtain of white water, mostly opaque so it reads as a fall: pale blue, with thin bright threads
     that run down the fall, brighter where the water breaks."""
     material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
     material.set_editor_property("two_sided", True)
@@ -523,7 +554,7 @@ def _cascade(material, lib):
     pulse = _node(lib, material, unreal.MaterialExpressionMultiply, -380, 120)
     lib.connect_material_expressions(sharp, "", pulse, "A")
     lib.connect_material_expressions(wave, "", pulse, "B")
-    water = _node(lib, material, unreal.MaterialExpressionConstant3Vector, -380, -80, constant=unreal.LinearColor(0.30, 0.62, 0.72, 1.0))
+    water = _node(lib, material, unreal.MaterialExpressionConstant3Vector, -380, -80, constant=unreal.LinearColor(0.55, 0.80, 0.88, 1.0))
     white = _node(lib, material, unreal.MaterialExpressionConstant3Vector, -380, -160, constant=unreal.LinearColor(0.92, 0.97, 1.0, 1.0))
     colour = _node(lib, material, unreal.MaterialExpressionLinearInterpolate, -220, -60)
     lib.connect_material_expressions(water, "", colour, "A")
@@ -533,7 +564,7 @@ def _cascade(material, lib):
     glow = _node(lib, material, unreal.MaterialExpressionMultiply, -100, 60, const_b=0.35)
     lib.connect_material_expressions(pulse, "", glow, "A")
     lib.connect_material_property(glow, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
-    opacity = _node(lib, material, unreal.MaterialExpressionLinearInterpolate, -100, 200, const_a=0.45, const_b=0.9)
+    opacity = _node(lib, material, unreal.MaterialExpressionLinearInterpolate, -100, 200, const_a=0.82, const_b=1.0)
     lib.connect_material_expressions(pulse, "", opacity, "Alpha")
     lib.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY)
     lib.connect_material_property(_node(lib, material, unreal.MaterialExpressionConstant, -100, 320, r=0.1), "", unreal.MaterialProperty.MP_ROUGHNESS)
@@ -656,6 +687,7 @@ river.setInput(0, route)
 river.parm("seed").set(RIVER_SEED)
 river.parm("cascade_drop").set(RIVER_DROP)
 river.parm("foam_size").set(0.55)
+river.parm("strips").set(6)
 geometry = river.geometry()
 prims = []
 for prim in geometry.prims():
@@ -667,13 +699,25 @@ print(json.dumps({"falls": falls, "prims": prims}))
 """
 
 
+def _densify(samples, limit):
+    """Two water rows per route point, so the ribbon bends smoothly; a fall
+    (a drop above the cascade limit) keeps its single sharp step."""
+    dense = samples[:1]
+    for a, b in zip(samples, samples[1:]):
+        if a[2] - b[2] <= limit * 0.5:
+            dense.append(tuple((p + q) * 0.5 for p, q in zip(a, b)))
+        dense.append(b)
+    return dense
+
+
 def _cook_in_houdini(samples, seed, drop=None):
     # Houdini works in metres with Y up; Unreal in centimetres with Z up.
     # A little narrower than the carved bed, so the water never overhangs a bank.
-    points = [(x / 100.0, level / 100.0, y / 100.0, width * 0.85 / 100.0) for x, y, level, width in samples]
+    drop = drop or STEP_HEIGHT * 0.6
+    points = [(x / 100.0, level / 100.0, y / 100.0, width * 0.85 / 100.0) for x, y, level, width in _densify(samples, drop)]
     code = (COOK.replace("HDA_FILE", repr(HDA_PATH.replace("\\", "/"))).replace("ROUTE_POINTS", repr(points))
             .replace("RIVER_SEED", str(int(seed) % 1000))
-            .replace("RIVER_DROP", repr((drop or STEP_HEIGHT * 0.6) / 100.0)))
+            .replace("RIVER_DROP", repr(drop / 100.0)))
     return json.loads(_houdini(code).strip().splitlines()[-1])
 
 
