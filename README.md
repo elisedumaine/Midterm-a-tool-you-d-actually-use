@@ -84,13 +84,13 @@ Every generated world is also a small game. Walk up to a red mushroom and press 
 
 ## Peer run (A6)
 
-**Classmate:** _name_
+**Classmate:** Fiori
 
-1. _What they did to install and run the tool._
-2. _What worked or did not work for them._
-3. _One suggestion or observation about the interface or the world._
+1. **What I did:** I cloned elisedumaine/pfa-week06, followed the README, extracted InteractiveWorldBuilder_Project.zip, opened InteractiveWorldBuilder.uproject in Unreal Engine 5.8, and waited for the editor and shaders to finish loading.
+2. **What happened:** The editor opened cleanly and the tool loaded — the log printed Interactive World Builder: World Builder v3.1 ready, and the EUW_WorldBuilderPanel widget asset compiled and validated, so the Python side and the panel were ready to use.
+3. **What confused me / broke:** The repo's InteractiveWorldBuilder.uproject sits at the root with only Config/Content/Python/Plugins next to it (no level or meshes), so I was only able to run it after extracting the bundled zip into its own folder, and even then the log reported the Third Person level was incomplete — LoadErrors: ... /Game/ExternalActors/ThirdPerson/Lvl_ThirdPerson/D/RI/R8L7GQXCHQGMMKBPTBJTNA ... was not available — meaning the level is missing World Partition tiles, which was unclear to diagnose from the README alone.
 
-**What I fixed after the peer run:** _one line_
+**What I fixed after the peer run:** The repo now holds the whole project (level with all its World Partition actor files, meshes, materials, Blueprints, and C++), so there is no zip to extract: you clone and open the `.uproject`. The README lists every requirement and step, and a fresh clone opens with no missing-actor load errors.
 
 ## How it is built
 
