@@ -41,6 +41,10 @@ STREAMS = 3              # small streams that run down the hills into the river
 STREAM_SPACING = 220.0
 STREAM_STEP = 70.0       # their little falls
 STREAM_BED = 35.0
+WATER_HALF_WIDTH = 0.42  # the water ribbon is 0.85 x width wide (see _cook_in_houdini)
+BANK_SLOPE = 0.2         # rise of the bed and banks per cm away from the water's edge
+STREAM_SLOPE = 0.12
+CROSSING = 0.75          # x grid cell: no ground point is farther than this from a water line
 
 
 # ---------------------------------------------------------------- route
@@ -138,8 +142,26 @@ def _sharpen_falls(samples, limit):
     return sharp
 
 
-def _carve(relief, samples, bed_depth=BED_DEPTH):
-    """Lower the ground into a bed under the water and gentle banks beside it."""
+def _bank(sample, d, step, slope):
+    """Height of a V-shaped bed that crosses the water level at the water's edge.
+
+    The ground grid is coarser than a narrow river, so the crossing never sits
+    closer than about 3/4 of a grid cell: there is always a ground point below
+    the water near its middle, and the edges stay within a few cm of the water.
+    """
+    _x, _y, level, width = sample
+    return level + slope * (d - max(width * WATER_HALF_WIDTH, step * CROSSING))
+
+
+def _carve(relief, samples, bed_depth=BED_DEPTH, slope=BANK_SLOPE, banks=True):
+    """Shape a bed under the water and banks that rise right at its edges.
+
+    The ground grid is coarser than the river (one point every ~5.7 m), and
+    the mesh interpolates linearly between points.  A flat bed dug below the
+    water left the ribbon hovering over a wide trench; a V that crosses the
+    water level at the water's edge stays right under linear interpolation.
+    banks=False only lowers the ground (small streams must not bury the river).
+    """
     n, step, extent, heights = relief.cells, relief.cell, relief.half_extent, relief.heights
     bucket = {}
     for s in samples:
@@ -150,33 +172,79 @@ def _carve(relief, samples, bed_depth=BED_DEPTH):
         for i in range(n + 1):
             x = -extent + i * step
             bx, by = int(x // 1500), int(y // 1500)
-            near, near_d = None, 1e30
+            near, near_d, wall = None, 1e30, None
             for dx in (-1, 0, 1):
                 for dy in (-1, 0, 1):
                     for s in bucket.get((bx + dx, by + dy), ()):
                         d = math.hypot(x - s[0], y - s[1])
                         if d < near_d:
                             near, near_d = s, d
+                        # Beside a cascade, the bank must stand above the
+                        # upper pool too, or the fall hangs in the air.
+                        if d < max(s[3] * WATER_HALF_WIDTH, step * CROSSING) + step * 0.6:
+                            wall = max(wall if wall is not None else -1e30, _bank(s, d, step, slope))
             if not near:
                 continue
-            _x, _y, level, width = near
-            inner, outer = width * 0.5 + step * 0.5, width * 1.7
-            if near_d >= outer:
+            half = max(near[3] * WATER_HALF_WIDTH, step * CROSSING)
+            if near_d >= near[3] * 1.7 + step:
                 continue
             h = heights[j][i]
-            if near_d <= inner:
-                target = level - bed_depth
+            if near_d <= half:
+                target = max(_bank(near, near_d, step, slope), near[2] - bed_depth)
+                if not banks:
+                    target = min(h, target)
+            elif banks and wall is not None:
+                target = wall
             else:
-                target = level + 25.0 + (h - level - 25.0) * w._smoothstep(inner, outer, near_d)
-                # A bank lower than the water showed the water's edge as a dark wall.
-                if near_d <= inner + step * 1.2 and h < level + 20.0:
-                    heights[j][i] = level + 20.0
-                    changed += 1
-                    continue
-            if target < h:
+                target = min(h, _bank(near, near_d, step, slope))
+            if abs(target - h) > 0.5:
                 heights[j][i] = target
                 changed += 1
     return changed
+
+
+def _height_on(relief, heights, x, y):
+    """relief.height on another copy of the height grid (same facets)."""
+    n = relief.cells
+    gx = min(max((x + relief.half_extent) / relief.cell, 0.0), n - 1e-6)
+    gy = min(max((y + relief.half_extent) / relief.cell, 0.0), n - 1e-6)
+    i, j = int(gx), int(gy)
+    fx, fy = gx - i, gy - j
+    row, next_row = heights[j], heights[j + 1]
+    if fx + fy <= 1.0:
+        h00 = row[i]
+        return h00 + fx * (row[i + 1] - h00) + fy * (next_row[i] - h00)
+    h11 = next_row[i + 1]
+    return h11 + (1.0 - fx) * (next_row[i] - h11) + (1.0 - fy) * (row[i + 1] - h11)
+
+
+def _reground(relief, before, origin_x=0.0):
+    """Move plants, rocks, paths and lanterns with the ground the river reshaped."""
+    moved = 0
+    layers = w.PLANT_LAYERS + (w.PATH_TAG,)
+    for actor in unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors():
+        if not w._has_tag(actor, w.GENERATED_TAG) or not any(w._has_tag(actor, layer) for layer in layers):
+            continue
+        components = actor.get_components_by_class(unreal.InstancedStaticMeshComponent)
+        if components:
+            for component in components:
+                for index in range(component.get_instance_count()):
+                    transform = component.get_instance_transform(index, True)
+                    spot = transform.translation
+                    x, y = spot.x - origin_x, spot.y
+                    shift = relief.height(x, y) - _height_on(relief, before, x, y)
+                    if abs(shift) > 1.0:
+                        transform.translation = unreal.Vector(spot.x, spot.y, spot.z + shift)
+                        component.update_instance_transform(index, transform, True, False, True)
+                        moved += 1
+        else:
+            spot = actor.get_actor_location()
+            x, y = spot.x - origin_x, spot.y
+            shift = relief.height(x, y) - _height_on(relief, before, x, y)
+            if abs(shift) > 1.0:
+                actor.set_actor_location(unreal.Vector(spot.x, spot.y, spot.z + shift), False, False)
+                moved += 1
+    return moved
 
 
 # ---------------------------------------------------------------- bridges
@@ -683,12 +751,16 @@ def build_river(save=True):
     samples = _river_profile(relief, route, terrain)
     length = round(len(samples) * SPACING / 100.0)
     samples = _sharpen_falls(samples, STEP_HEIGHT * 0.6)
+    before = [list(row) for row in relief.heights]
     carved = _carve(relief, samples)
     # Small streams from the hills: routed on the carved ground, carved in turn.
     streams = [_sharpen_falls(_stream_profile(relief, route, level), STREAM_STEP * 0.6)
                for route, level in _stream_routes(relief, samples, data)]
     for stream in streams:
-        carved += _carve(relief, stream, STREAM_BED)
+        carved += _carve(relief, stream, STREAM_BED, STREAM_SLOPE, banks=False)
+    # Carve the river again so a stream's banks never cover it where they meet.
+    if streams:
+        carved += _carve(relief, samples)
     w._ground_mesh(relief, terrain, w.GENERATED_TAG)
     # The carved relief is not the seed's relief: drop it from the cache so a
     # new Build World starts from the clean ground again.
@@ -697,6 +769,7 @@ def build_river(save=True):
     palette = w._palette(w._values(panel[0])) if panel else w._palette(dict(data, palette=w.DEFAULT_PALETTE, theme="Summer"))
     _ensure_materials(palette)
     removed = _clear_corridor(samples + [s for stream in streams for s in stream])
+    moved = _reground(relief, before)
     bridges = _build_bridges(relief, data, [samples] + streams, palette)
     result = _cook_in_houdini(samples, data["seed"])
     for number, stream in enumerate(streams):
@@ -714,8 +787,8 @@ def build_river(save=True):
         unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
     message = "River ready: {} m of water, {} small streams, {} cascades and {} bridges.".format(
         length, len(streams), result["falls"], bridges)
-    unreal.log("IWB river: {} ({} faces, {} plants cleared, {} ground points carved)".format(
-        message, len(result["prims"]), removed, carved))
+    unreal.log("IWB river: {} ({} faces, {} plants cleared, {} moved with the ground, {} ground points carved)".format(
+        message, len(result["prims"]), removed, moved, carved))
     if panel:
         w._status(panel[0], message)
     return message
