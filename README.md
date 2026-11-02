@@ -21,7 +21,7 @@ Blocking out an early natural level by hand means placing the ground, the hills,
 
 - **Windows** with **Unreal Engine 5.8**, installed from the Epic Games Launcher.
 - **Visual Studio 2022** with the **Game development with C++** workload. The project has a small C++ module (`Source/ForestGame`, used for the animals, birds, and game HUD), and Unreal compiles it the first time the project opens.
-- Houdini is **not** needed (see [Optional: Houdini river](#optional-houdini-river)).
+- Houdini is **not** needed. It only adds the river (see [Optional: Houdini river](#optional-houdini-river)).
 
 ### Steps
 
@@ -70,7 +70,7 @@ Every generated world is also a small game. Walk up to a red mushroom and press 
 - Only one biome: a **forest** (four seasons, eight palettes). Mountain, beach, and meadow worlds are not built.
 - It is an **editor tool**, not a packaged game or an in-game menu.
 - The **PCG** plugin is enabled, but placement is done in Python, not with an authored PCG graph.
-- The **river** needs Houdini open at the same time. Without Houdini, Build World skips it and says *No river this time*.
+- The **river** needs Houdini open at the same time (setup in [Optional: Houdini river](#optional-houdini-river)). Without Houdini, Build World skips it and says *No river this time*. The ground grid (one point every 5.7 m) is coarser than the streams, so right after some cascades the water can sit a little above or below the ground.
 - After editing the Python code, Unreal must be **fully restarted**: it keeps the old panel callbacks in memory.
 - A wide world on **Lush** takes longer to build. The build estimate on the Nature tab shows how many trees, shrubs, rocks, and plants it will place.
 
@@ -106,7 +106,18 @@ Every generated world is also a small game. Walk up to a red mushroom and press 
 
 ## Optional: Houdini river
 
-This part is **not needed** to run the tool. With Houdini 22.0 and Houdini Engine for Unreal installed, `Houdini/iwb_river.hda` builds a river and its streams along the generated valleys, and `Houdini/iwb_lowpoly_rock.hda` makes faceted low-poly rocks. The Houdini Engine plugin is disabled in `InteractiveWorldBuilder.uproject` so the project opens on machines without Houdini; set `"HoudiniEngine"` to `"Enabled": true` to use it.
+This part is **not needed** to run the tool. Without Houdini you get the whole forest; the river is the only thing missing.
+
+With Houdini open, every **Build World** also makes a river that follows the new valleys, with small side streams, cascades, foam, boulders, and wooden bridges where the paths cross. Unreal finds the route and carves the bed into the ground; `Houdini/iwb_river.hda` turns the route into the water mesh; Unreal saves it as an ordinary static mesh, so Play mode never needs Houdini.
+
+To get the river on your computer:
+
+1. Install **Houdini 22.0** from [sidefx.com](https://www.sidefx.com/download/). The free **Houdini Apprentice** licence is enough.
+2. Open Houdini once and close it (this creates its settings folder in `Documents\houdini22.0`).
+3. Double-click `Tools\houdini\install_houdini_bridge.bat`. It copies two small Python files into `Documents\houdini22.0\python3.13libs`, so Houdini starts a local bridge (127.0.0.1 only, with a secret token) every time it opens.
+4. Open Houdini and leave it open, then click **Build World** in Unreal. The status line says *River ready: … m of water, … cascades*.
+
+The Houdini Engine plugin itself is **not** used (its bake step crashed the editor), and it is disabled in `InteractiveWorldBuilder.uproject` so the project opens on machines without Houdini. `Houdini/iwb_lowpoly_rock.hda` is a separate test tool: a faceted low-poly rock with Seed, Size, Roughness, and Detail.
 
 ## Assets and credit
 
