@@ -496,7 +496,7 @@ SLIDERS = (
     ("ForestCover", "forest_cover", "Forest cover", 50.0, 0.0, 100.0, False),
     ("Wildlife", "wildlife", "Wildlife", 50.0, 0.0, 100.0, False),
     ("Lighting", "lighting", "Sun strength", 8.0, 1.0, 15.0, True),
-    ("LightTint", "light_tint", "Sun warmth", 0.12, 0.0, 1.0, True),
+    ("LightTint", "light_tint", "Sun warmth", 0.5, 0.0, 1.0, True),
     ("SkyTint", "sky_tint", "Sky warmth", 0.55, 0.0, 1.0, True),
     ("GroundTint", "ground_tint", "Ground richness", 0.32, 0.0, 1.0, True),
     ("Haze", "haze", "Haze", 50.0, 0.0, 100.0, False),
@@ -3406,12 +3406,7 @@ def _apply_lighting(data, tag, origin_x):
         min(1.0, sky_base.b + data["sky_tint"] * 0.08),
         1.0,
     )
-    light_color = unreal.LinearColor(
-        min(1.0, sun_base.r),
-        min(1.0, sun_base.g + data["light_tint"] * 0.08),
-        min(1.0, sun_base.b + data["light_tint"] * 0.12),
-        1.0,
-    )
+    light_color = unreal.LinearColor(min(1.0, sun_base.r), min(1.0, sun_base.g), min(1.0, sun_base.b), 1.0)
     # Third Person already owns a sun and a skylight. Reuse those instead of
     # adding a second pair, which caused the "multiple directional lights" warning.
     actors = unreal.EditorLevelLibrary.get_all_level_actors()
@@ -3436,6 +3431,13 @@ def _apply_lighting(data, tag, origin_x):
             light_color = unreal.LinearColor(*(getattr(light_color, c) * (1.0 - sun_mix) + sun[i] * sun_mix for i, c in enumerate("rgb")), 1.0)
             time = dict(time, strength=time["strength"] * strength, fog=time["fog"] * fog,
                         haze=tuple(time["haze"][i] * (1.0 - haze_mix) + haze[i] * haze_mix for i in range(3)))
+        # Sun warmth tints the final colour: 0 = cool blue-white, 0.5 = as the
+        # palette and hour make it, 1 = deep orange.  (It used to add a little
+        # green and blue, so it barely showed and even cooled the light.)
+        warmth = data["light_tint"]
+        cool, warm = (0.72, 0.86, 1.25), (1.0, 0.64, 0.38)
+        side, amount = (cool, 1.0 - warmth * 2.0) if warmth < 0.5 else (warm, warmth * 2.0 - 1.0)
+        light_color = unreal.LinearColor(*(getattr(light_color, c) * (1.0 - amount + side[i] * amount) for i, c in enumerate("rgb")), 1.0)
         # UE directional lights use a small lux value here, not 10,000x the UI value.
         light_component.set_editor_property("intensity", (1.5 + data["lighting"] * 0.70) * time["strength"])
         light_component.set_light_color(light_color)
