@@ -1,5 +1,7 @@
 #include "ForestGameManager.h"
 
+#include "ForestLanguage.h"
+
 #include "EngineUtils.h"
 #include "ForestAnimal.h"
 #include "ForestGame.h"
@@ -35,8 +37,9 @@ void AForestGameManager::BeginPlay()
 		++AnimalsTotal;
 	}
 	ShowMessage(FText::FromString(AnimalsTotal > 0
-		? TEXT("The forest animals are hungry! Pick up mushrooms and approach them gently.")
-		: TEXT("Pick up the mushrooms of the forest.")), 6.0f);
+		? ForestLanguage::Pick(TEXT("The forest animals are hungry! Pick up mushrooms and approach them gently."),
+			TEXT("Les animaux de la forêt ont faim ! Ramasse des champignons et approche-toi doucement."))
+		: ForestLanguage::Pick(TEXT("Pick up the mushrooms of the forest."), TEXT("Ramasse les champignons de la forêt."))), 6.0f);
 	UE_LOG(LogForestGame, Log, TEXT("Forest game started with %d animals."), AnimalsTotal);
 }
 
@@ -109,14 +112,14 @@ void AForestGameManager::Tick(float DeltaSeconds)
 		const FVector From = Player->GetActorLocation();
 		if (NearestPickup(From))
 		{
-			Prompt = FText::FromString(TEXT("[E]  Pick up the mushroom"));
+			Prompt = FText::FromString(ForestLanguage::Pick(TEXT("[E]  Pick up the mushroom"), TEXT("[E]  Ramasser le champignon")));
 		}
 		else if (const AForestAnimal* Animal = NearestAnimal(From))
 		{
 			const FString Name = Animal->DisplayName.ToString();
 			Prompt = FText::FromString(Mushrooms > 0
-				? FString::Printf(TEXT("[E]  Give a mushroom to %s"), *Name)
-				: FString::Printf(TEXT("You need a mushroom to feed %s"), *Name));
+				? FOREST_PRINTF(TEXT("[E]  Give a mushroom %s"), TEXT("[E]  Donner un champignon %s"), *ForestLanguage::Animal(Name, true))
+				: FOREST_PRINTF(TEXT("You need a mushroom to feed %s"), TEXT("Il te faut un champignon pour nourrir %s"), *ForestLanguage::Animal(Name)));
 		}
 	}
 
@@ -139,7 +142,7 @@ void AForestGameManager::Interact()
 	{
 		Pickup->Collect();
 		++Mushrooms;
-		ShowMessage(FText::FromString(FString::Printf(TEXT("+1 mushroom  (%d in your basket)"), Mushrooms)), 2.0f);
+		ShowMessage(FText::FromString(FOREST_PRINTF(TEXT("+1 mushroom  (%d in your basket)"), TEXT("+1 champignon  (%d dans ton panier)"), Mushrooms)), 2.0f);
 		return;
 	}
 
@@ -152,7 +155,7 @@ void AForestGameManager::Interact()
 	if (Mushrooms <= 0)
 	{
 		Animal->Refuse();
-		ShowMessage(FText::FromString(FString::Printf(TEXT("You have nothing to give %s... Go and find a mushroom!"), *Name)), 2.5f);
+		ShowMessage(FText::FromString(FOREST_PRINTF(TEXT("You have nothing to give %s... Go and find a mushroom!"), TEXT("Tu n'as rien à donner %s... Va trouver un champignon !"), *ForestLanguage::Animal(Name, true))), 2.5f);
 		return;
 	}
 	if (!Animal->Feed(Player))
@@ -168,15 +171,16 @@ void AForestGameManager::Interact()
 		{
 			It->Dance();
 		}
-		ShowMessage(FText::FromString(TEXT("All the animals are fed! The forest thanks you.")), 10.0f);
+		ShowMessage(FText::FromString(ForestLanguage::Pick(TEXT("All the animals are fed! The forest thanks you."), TEXT("Tous les animaux sont nourris ! La forêt te remercie."))), 10.0f);
 	}
 	else
 	{
+		Name = ForestLanguage::Animal(Name);
 		if (!Name.IsEmpty())
 		{
 			Name[0] = FChar::ToUpper(Name[0]);
 		}
-		ShowMessage(FText::FromString(FString::Printf(TEXT("Yum! %s is fed (%d / %d) and follows you now."),
+		ShowMessage(FText::FromString(FOREST_PRINTF(TEXT("Yum! %s is fed (%d / %d) and follows you now."), TEXT("Miam ! %s est nourri (%d / %d) et te suit maintenant."),
 			*Name, AnimalsFed, AnimalsTotal)), 3.0f);
 	}
 }
