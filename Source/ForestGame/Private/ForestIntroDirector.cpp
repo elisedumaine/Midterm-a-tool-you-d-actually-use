@@ -253,8 +253,9 @@ void AForestIntroDirector::FinishIntro()
 	}
 	if (PlayerController)
 	{
-		PlayerController->SetIgnoreMoveInput(false);
-		PlayerController->SetIgnoreLookInput(false);
+		// The title menu and the intro both blocked move/look input, and each
+		// block is counted: clear them all at once, or the player can only jump.
+		PlayerController->ResetIgnoreInputFlags();
 		PlayerController->ClientSetCameraFade(false, FColor::Black, FVector2D::ZeroVector, 0.0f, false, false);
 	}
 	if (AForestGameManager* Manager = AForestGameManager::Get(this))
