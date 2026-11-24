@@ -7,6 +7,78 @@ Interactive World Builder is an Unreal Editor tool that builds a small, playable
 
 **Demo video (3 min):** https://vimeo.com/1242638803?share=copy&fl=sv&fe=ci
 
+---
+
+## Research Project 1 — Low-Poly Nature Kit (Nov 2026)
+
+**Research Project 1 video (1–3 min):** _link coming_
+
+The Houdini half (HDAs, build scripts, proposal) is in
+[Research-Project-1-proposal](https://github.com/elisedumaine/Research-Project-1-proposal)
+(`PROPOSAL.md` is what I proposed). This repo is the game it feeds.
+
+### What I set out to do
+
+A Houdini kit of low-poly generators (trees, rocks...) sharing one style, plus a
+"Low-Polify" tool for any imported model, feeding this World Builder. Smallest
+version: style + trees + rocks, baked and growing in one Unreal forest.
+
+### What I made
+
+- **Houdini HDAs**: one shared style (`lpk_style`), trees with 10 species
+  (broadleaf, pine, birch, dead, palm, cherry, willow, cactus, giant mushroom,
+  bamboo), rocks (pebble, boulder, slab, cliff, cluster), Low-Polify for imported
+  models, a simple character generator. Bonus: photo → 3D with TripoSR, run locally.
+- **Low-Poly Studio** (`Content/Python/lowpoly_studio*.py`): a game-style panel in
+  Unreal with ◀ ▶ arrows, sliders and a live 3D preview. **Add to forest** bakes 6
+  variations into the World Builder's population, so the generator grows my designs
+  everywhere. Tabs: Trees, Rocks, Import, Character.
+- **Living climate** (`Source/ForestGame/ForestSky`, `Content/Python/lowpoly_climate.py`):
+  in Play time passes (a day = 12 min) and the weather changes by itself: clear,
+  rain, storm with lightning and thunder, sun shower with a rainbow, mist, snow,
+  stars and moon at night, wind that sways the plants.
+- **Title screen + wake-up intro**, English / French choice.
+
+### How it changed, and why
+
+- I didn't use the Houdini Engine plugin. I wrote a small local bridge instead
+  (Houdini stays open, Unreal sends it commands), because my Education license
+  can't run Houdini in the background and I wanted to test vertex colors early.
+- I dropped the mushroom/props tabs for a character tab.
+- The climate wasn't in the proposal: once the forest worked I wanted it alive.
+
+### How to run it
+
+1. Install as below and open the project: the **Low-Poly Studio** opens by itself.
+2. To design new trees/rocks, Houdini 22 must be open with the bridge (see the kit
+   repo). Without it, the forest still works with the meshes already baked.
+3. Pick a design, **Add to forest**, then **Grow forest now**.
+4. Press **Play**, choose English/Français, press **PLAY**.
+
+### What I learned
+
+Houdini VEX and HDAs, vertex-color materials, Material Parameter Collections (one
+value changes every material: snow, wet, wind), Python-driven editor panels, C++
+actors. Debugging: a character with inside-out faces (I fixed it by hand in
+Houdini), a preview that crashed Unreal out of memory, a rainbow material whose
+colour was silently zero. I used an AI agent a lot; my job was to decide what to
+build, judge it on screen and understand each part.
+
+### What doesn't work yet
+
+- Classmates can't use the Studio straight from GitHub: the kit uses my local paths.
+- Not checked on screen yet: blowing leaves, dawn mist in the valleys, the wake-up
+  intro and the language switch (they compile, but I haven't tested them in Play).
+- Low-Polify only tested on a few models; photo → 3D is slow (~75 s). No LODs.
+
+### What I'd do next
+
+Make the kit work for classmates (relative paths, setup script), aurora and
+shooting stars at night, LODs, and a sandbox mode (pick up apples and berries,
+feed animals).
+
+---
+
 ## Where the tool lives
 
 The tool is **not a standalone app**. It runs **inside Unreal Engine 5.8** as an **Editor Utility Widget**, a docked panel in the level editor. The Third Person template character lets you walk the generated world in Play mode.
