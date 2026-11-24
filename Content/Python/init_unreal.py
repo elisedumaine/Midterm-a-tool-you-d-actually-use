@@ -17,3 +17,11 @@ if _in_editor():
         interactive_world_builder.startup()
     except Exception as error:
         unreal.log_error("World Builder could not open its panel: {}".format(error))
+    # Low-Poly Studio (Research Project 1): Tools > Open Low-Poly Studio.
+    try:
+        import lowpoly_studio_panel
+        lowpoly_studio_panel.register_menu()
+        # Open it at startup, like the World Builder, so it is always there.
+        lowpoly_studio_panel.open_studio()
+    except Exception as error:
+        unreal.log_error("Low-Poly Studio menu could not be added: {}".format(error))
