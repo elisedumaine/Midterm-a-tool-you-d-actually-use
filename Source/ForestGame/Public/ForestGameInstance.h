@@ -15,6 +15,8 @@ class FORESTGAME_API UForestGameInstance : public UGameInstance
 
 public:
 	virtual void OnStart() override;
+	/** Leaves the title screen and plays the wake-up (the PLAY button; callable from Python for tests). */
+	UFUNCTION(BlueprintCallable, Category = "Forest")
 	void StartForestIntro();
 
 private:

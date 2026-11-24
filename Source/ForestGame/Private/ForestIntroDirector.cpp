@@ -191,17 +191,31 @@ void AForestIntroDirector::PlacePlayerInForest()
 		}
 	}
 
-	FHitResult GroundHit;
-	const FVector TraceStart(BestPoint.X, BestPoint.Y, BestPoint.Z + 16000.0f);
-	const FVector TraceEnd(BestPoint.X, BestPoint.Y, BestPoint.Z - 16000.0f);
+	// BestPoint is a tree's own position: wake up a few metres beside it, on
+	// open ground (the first spot around it whose ray reaches the terrain,
+	// not a trunk, a rock or a canopy).
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(ForestIntroGround), false, PlayerCharacter);
-	if (World->LineTraceSingleByChannel(GroundHit, TraceStart, TraceEnd, ECC_Visibility, Params))
+	const float CapsuleHalfHeight = PlayerCharacter->GetCapsuleComponent()
+		? PlayerCharacter->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()
+		: 90.0f;
+	for (const float Distance : {350.0f, 550.0f, 800.0f})
 	{
-		const float CapsuleHalfHeight = PlayerCharacter->GetCapsuleComponent()
-			? PlayerCharacter->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()
-			: 90.0f;
-		PlayerCharacter->SetActorLocation(GroundHit.ImpactPoint + FVector(0.0f, 0.0f, CapsuleHalfHeight + 3.0f), false, nullptr, ETeleportType::TeleportPhysics);
+		for (int32 Step = 0; Step < 8; ++Step)
+		{
+			const float Angle = Step * PI / 4.0f;
+			const FVector Spot = BestPoint + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.0f) * Distance;
+			FHitResult GroundHit;
+			const FVector TraceStart(Spot.X, Spot.Y, Spot.Z + 16000.0f);
+			const FVector TraceEnd(Spot.X, Spot.Y, Spot.Z - 16000.0f);
+			if (World->LineTraceSingleByChannel(GroundHit, TraceStart, TraceEnd, ECC_Visibility, Params)
+				&& GroundHit.GetActor() && GroundHit.GetActor()->ActorHasTag(TEXT("IWB_Terrain")))
+			{
+				PlayerCharacter->SetActorLocation(GroundHit.ImpactPoint + FVector(0.0f, 0.0f, CapsuleHalfHeight + 3.0f), false, nullptr, ETeleportType::TeleportPhysics);
+				return;
+			}
+		}
 	}
+	// No open ground found: keep the level's player start.
 }
 
 void AForestIntroDirector::SetMorningLight() const
