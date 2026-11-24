@@ -475,7 +475,9 @@ def pick_file(title, file_filter):
     import subprocess
     script = ("Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; "
               "$d.Title = '%s'; $d.Filter = '%s'; if ($d.ShowDialog() -eq 'OK') { $d.FileName }" % (title, file_filter))
-    result = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", script],
+    # Full path: Unreal's PATH does not always contain PowerShell.
+    powershell = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+    result = subprocess.run([powershell, "-NoProfile", "-STA", "-Command", script],
                             capture_output=True, text=True, creationflags=0x08000000)
     return result.stdout.strip()
 
