@@ -4,6 +4,8 @@
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
 #include "ForestGameManager.h"
+#include "ForestLanguage.h"
+#include "ForestSky.h"
 
 void AForestHUD::DrawPanel(float X, float Y, float Width, float Height, const FLinearColor& Color)
 {
@@ -40,10 +42,10 @@ void AForestHUD::DrawHUD()
 	// Top left: the basket and the animal counter.
 	const float Pad = 24.0f * UiScale;
 	DrawPanel(Pad, Pad, 330.0f * UiScale, 92.0f * UiScale, Shade);
-	DrawLine(FString::Printf(TEXT("Mushrooms: %d"), Manager->Mushrooms), Pad * 1.6f, Pad * 1.45f, 1.1f * UiScale, Cream);
+	DrawLine(FOREST_PRINTF(TEXT("Mushrooms: %d"), TEXT("Champignons : %d"), Manager->Mushrooms), Pad * 1.6f, Pad * 1.45f, 1.1f * UiScale, Cream);
 	if (Manager->AnimalsTotal > 0)
 	{
-		DrawLine(FString::Printf(TEXT("Animals fed: %d / %d"), Manager->AnimalsFed, Manager->AnimalsTotal), Pad * 1.6f, Pad * 1.45f + 36.0f * UiScale, 1.1f * UiScale, Manager->bWon ? Leaf : Cream);
+		DrawLine(FOREST_PRINTF(TEXT("Animals fed: %d / %d"), TEXT("Animaux nourris : %d / %d"), Manager->AnimalsFed, Manager->AnimalsTotal), Pad * 1.6f, Pad * 1.45f + 36.0f * UiScale, 1.1f * UiScale, Manager->bWon ? Leaf : Cream);
 	}
 
 	// Bottom centre: what E would do.
@@ -52,6 +54,14 @@ void AForestHUD::DrawHUD()
 		const float PromptY = Canvas->ClipY - 150.0f * UiScale;
 		DrawPanel(Canvas->ClipX * 0.5f - 300.0f * UiScale, PromptY - 10.0f * UiScale, 600.0f * UiScale, 52.0f * UiScale, Shade);
 		DrawLine(Manager->Prompt.ToString(), Canvas->ClipX * 0.5f, PromptY, 1.15f * UiScale, Cream, true);
+	}
+
+	// Top right: the day, the hour and the weather of the living sky.
+	if (const AForestSky* Sky = AForestSky::Get(this))
+	{
+		const FString Clock = Sky->Describe();
+		DrawPanel(Canvas->ClipX - Pad - 360.0f * UiScale, Pad, 360.0f * UiScale, 52.0f * UiScale, Shade);
+		DrawLine(Clock, Canvas->ClipX - Pad - 180.0f * UiScale, Pad * 1.45f, 1.0f * UiScale, Cream, true);
 	}
 
 	// Upper centre: short-lived messages.
