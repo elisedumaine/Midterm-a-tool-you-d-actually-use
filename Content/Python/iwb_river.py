@@ -230,10 +230,10 @@ def _height_on(relief, heights, x, y):
     return h11 + (1.0 - fx) * (next_row[i] - h11) + (1.0 - fy) * (row[i + 1] - h11)
 
 
-def _reground(relief, before, origin_x=0.0):
+def _reground(relief, before, origin_x=0.0, layers=None):
     """Move plants, rocks, paths and lanterns with the ground the river reshaped."""
     moved = 0
-    layers = w.PLANT_LAYERS + (w.PATH_TAG,)
+    layers = layers or w.PLANT_LAYERS + (w.PATH_TAG,)
     for actor in unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors():
         if not w._has_tag(actor, w.GENERATED_TAG) or not any(w._has_tag(actor, layer) for layer in layers):
             continue
@@ -1007,6 +1007,44 @@ def remove_river():
     for actor in _actors():
         if w._has_tag(actor, RIVER_TAG):
             actor.destroy_actor()
+
+
+def has_river():
+    return any(w._has_tag(actor, RIVER_TAG) for actor in _actors())
+
+
+def settle_plants():
+    """After New plants: sink the new plants into the river's carved valleys and
+    clear them out of the water, without touching the ground, the water or Houdini.
+
+    New plants grows on the seed's clean ground, but the river carved that
+    ground when the world was built, so near the river everything floated.
+    The route and the carving are worked out again exactly as build_river does
+    (same seed, same steps), only to know where the ground went down."""
+    ground = w._load_last_build()
+    if not ground or not has_river():
+        return 0, 0
+    data = dict(ground)
+    terrain = float(data["terrain"])
+    w._relief_cache.clear()
+    relief = w._terrain_features(data)
+    samples = _sharpen_falls(_river_profile(relief, _river_route(relief, data), terrain), STEP_HEIGHT * 0.6)
+    before = [list(row) for row in relief.heights]
+    _carve(relief, samples)
+    streams = [_join(_stream_profile(relief, route, level), samples)
+               for route, level in _stream_routes(relief, samples, data)]
+    for stream in streams:
+        _carve(relief, stream, STREAM_BED, STREAM_SLOPE)
+    if streams:
+        _carve(relief, samples, spare=[s for stream in streams for s in stream])
+    samples = _surface(relief, samples)
+    streams = [_surface(relief, stream) for stream in streams]
+    w._relief_cache.clear()
+    removed = _clear_corridor(samples + [s for stream in streams for s in stream])
+    # Only the regrown layers: the paths already sank when the river was built.
+    moved = _reground(relief, before, layers=w.PLANT_LAYERS)
+    unreal.log("IWB river: new plants settled ({} cleared from the water, {} moved down with the ground)".format(removed, moved))
+    return removed, moved
 
 
 def build_river(save=True):

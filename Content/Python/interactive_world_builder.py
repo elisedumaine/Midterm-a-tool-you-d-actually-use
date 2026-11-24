@@ -496,7 +496,7 @@ SLIDERS = (
     ("ForestCover", "forest_cover", "Forest cover", 50.0, 0.0, 100.0, False),
     ("Wildlife", "wildlife", "Wildlife", 50.0, 0.0, 100.0, False),
     ("Lighting", "lighting", "Sun strength", 8.0, 1.0, 15.0, True),
-    ("LightTint", "light_tint", "Sun warmth", 0.5, 0.0, 1.0, True),
+    ("LightTint", "light_tint", "Sun warmth", 0.12, 0.0, 1.0, True),
     ("SkyTint", "sky_tint", "Sky warmth", 0.55, 0.0, 1.0, True),
     ("GroundTint", "ground_tint", "Ground richness", 0.32, 0.0, 1.0, True),
     ("Haze", "haze", "Haze", 50.0, 0.0, 100.0, False),
@@ -1090,12 +1090,13 @@ def _tag_value(actor, prefix):
     return None
 
 
-MATERIAL_VERSION = "weather-1"
+MATERIAL_VERSION = "weather-2"
 WEATHER_COLLECTION_PATH = "/Game/WorldBuilder/Materials/MPC_IWB_Weather"
 
 
 def _weather_collection():
-    """Two world-wide values every surface reads: Snow (white tops) and Wet (dark, glossy)."""
+    """World-wide values every surface reads: Snow (white tops), Wet (dark, glossy),
+    and for the living sky Night, Clouds and Wind (plants sway)."""
     collection = unreal.load_asset(WEATHER_COLLECTION_PATH)
     if collection:
         return collection
@@ -1103,7 +1104,7 @@ def _weather_collection():
         "MPC_IWB_Weather", "/Game/WorldBuilder/Materials", unreal.MaterialParameterCollection,
         unreal.MaterialParameterCollectionFactoryNew())
     params = []
-    for name in ("Snow", "Wet"):
+    for name in ("Snow", "Wet", "Night", "Clouds", "Wind"):
         param = unreal.CollectionScalarParameter()
         param.set_editor_property("parameter_name", name)
         param.set_editor_property("default_value", 0.0)
@@ -1117,9 +1118,11 @@ def _set_weather_values(snow, wet):
     """Saved in the asset, so the editor and Play mode both see the weather."""
     collection = _weather_collection()
     params = list(collection.get_editor_property("scalar_parameters"))
+    values = {"Snow": snow, "Wet": wet}
     for param in params:
         name = str(param.get_editor_property("parameter_name"))
-        param.set_editor_property("default_value", snow if name == "Snow" else wet)
+        if name in values:
+            param.set_editor_property("default_value", values[name])
     collection.set_editor_property("scalar_parameters", params)
     unreal.EditorAssetLibrary.save_loaded_asset(collection, False)
     world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
@@ -1178,6 +1181,81 @@ def _weather_shading(material, base, base_output=""):
     lib.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
     lib.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
     lib.connect_material_property(specular, "", unreal.MaterialProperty.MP_SPECULAR)
+    _wind_sway(material, node, collection)
+
+
+WIND_DIRECTION = (0.8, 0.6)   # AForestSky::WindDirection blows the same way
+
+
+def _wind_sway(material, node, collection):
+    """Plants lean and rock in the wind: the higher above its base, the more a point moves.
+
+    offset = wind direction x height x 0.05 x Wind x Sway x (0.65 + slow sway + quick flutter)
+    Sway is 0 by default (rocks, ground); the living sky sets it on trees and grass in Play.
+    The flutter's phase follows the world position, so gusts roll across the forest."""
+    lib = unreal.MaterialEditingLibrary
+
+    def link(a, b, pin="", out=""):
+        lib.connect_material_expressions(a, out, b, pin)
+
+    sway = node(unreal.MaterialExpressionScalarParameter, -1100, 900, parameter_name="Sway", default_value=0.0)
+    wind = node(unreal.MaterialExpressionCollectionParameter, -1100, 1000, collection=collection, parameter_name="Wind")
+    # Height above the base of this tree (instance), in world centimetres.
+    local = node(unreal.MaterialExpressionLocalPosition, -1300, 1120)
+    lifted = node(unreal.MaterialExpressionTransform, -1120, 1120,
+                  transform_source_type=unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_LOCAL,
+                  transform_type=unreal.MaterialVectorCoordTransform.TRANSFORM_WORLD)
+    link(local, lifted)
+    height = node(unreal.MaterialExpressionComponentMask, -940, 1120, r=False, g=False, b=True, a=False)
+    link(lifted, height)
+    capped = node(unreal.MaterialExpressionClamp, -800, 1120, min_default=0.0, max_default=1500.0)
+    link(height, capped)
+    # Phase from the world position: neighbours move almost together.
+    position = node(unreal.MaterialExpressionWorldPosition, -1300, 1280)
+    flat = node(unreal.MaterialExpressionComponentMask, -1120, 1280, r=True, g=True, b=False, a=False)
+    link(position, flat)
+    spread = node(unreal.MaterialExpressionConstant2Vector, -1120, 1380, r=0.0011, g=0.0007)
+    phase = node(unreal.MaterialExpressionDotProduct, -940, 1300)
+    link(flat, phase, "A")
+    link(spread, phase, "B")
+    time = node(unreal.MaterialExpressionTime, -940, 1420)
+    waves = []
+    for index, (speed, size, phase_scale) in enumerate(((1.6, 0.35, 1.0), (4.1, 0.12, 2.3))):
+        y = 1300 + index * 160
+        fast = node(unreal.MaterialExpressionMultiply, -780, y, const_b=speed)
+        link(time, fast, "A")
+        shifted = node(unreal.MaterialExpressionMultiply, -780, y + 60, const_b=phase_scale)
+        link(phase, shifted, "A")
+        angle = node(unreal.MaterialExpressionAdd, -640, y)
+        link(fast, angle, "A")
+        link(shifted, angle, "B")
+        wave = node(unreal.MaterialExpressionSine, -520, y)
+        link(angle, wave)
+        scaled = node(unreal.MaterialExpressionMultiply, -400, y, const_b=size)
+        link(wave, scaled, "A")
+        waves.append(scaled)
+    rocking = node(unreal.MaterialExpressionAdd, -280, 1360)
+    link(waves[0], rocking, "A")
+    link(waves[1], rocking, "B")
+    lean = node(unreal.MaterialExpressionAdd, -160, 1360, const_b=0.65)
+    link(rocking, lean, "A")
+    strength = node(unreal.MaterialExpressionMultiply, -800, 960)
+    link(sway, strength, "A")
+    link(wind, strength, "B")
+    bend = node(unreal.MaterialExpressionMultiply, -640, 1040, const_b=0.05)
+    link(capped, bend, "A")
+    amount = node(unreal.MaterialExpressionMultiply, -480, 1000)
+    link(strength, amount, "A")
+    link(bend, amount, "B")
+    moving = node(unreal.MaterialExpressionMultiply, -40, 1100)
+    link(amount, moving, "A")
+    link(lean, moving, "B")
+    direction = node(unreal.MaterialExpressionConstant3Vector, -40, 1240,
+                     constant=unreal.LinearColor(WIND_DIRECTION[0], WIND_DIRECTION[1], 0.0, 1.0))
+    offset = node(unreal.MaterialExpressionMultiply, 100, 1160)
+    link(direction, offset, "A")
+    link(moving, offset, "B")
+    lib.connect_material_property(offset, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
 
 
 def _material_is_current(material):
@@ -2877,6 +2955,24 @@ def _build_vegetation(data, tag, origin_x, terrain_features):
     plant_meshes = _kenney_meshes(("plant_flatShort", "plant_flatTall"))
     flower_meshes = _kenney_meshes(("flower_purpleA", "flower_purpleB", "flower_purpleC", "flower_redA", "flower_redB", "flower_redC", "flower_yellowA", "flower_yellowB", "flower_yellowC"))
     bush_meshes = _kenney_meshes(("plant_bush", "plant_bushDetailed", "plant_bushLarge", "plant_bushSmall", "plant_bushTriangle", "plant_bushLargeTriangle"))
+    # Designs from the Low-Poly Studio replace the stock trees and rocks of
+    # their layer.  They carry their own colors, so they are never tinted.
+    try:
+        import lowpoly_studio
+        studio = lowpoly_studio.population_meshes()
+    except Exception as error:
+        unreal.log_warning("World Builder: Low-Poly Studio designs skipped: {}".format(error))
+        studio = {}
+    if studio.get("trees"):
+        tree_meshes = young_meshes = studio["trees"]
+    if studio.get("rocks"):
+        rock_meshes = studio["rocks"]
+    if studio.get("pebbles"):
+        small_rock_meshes = studio["pebbles"]
+    if studio.get("landmarks"):
+        hilltop_meshes = studio["landmarks"]
+    if studio.get("floor"):
+        floor_meshes = studio["floor"]
     # Trees, rocks, stumps, and lanterns are obstacles in Play mode.
     _ensure_collision(set(tree_meshes + young_meshes + rock_meshes + hilltop_meshes + floor_meshes + village_meshes))
     fields = _ecology(data["seed"], terrain, data.get("forest_cover", 50.0))
@@ -2904,6 +3000,8 @@ def _build_vegetation(data, tag, origin_x, terrain_features):
     def place_prop(mesh, x, y, height, layer, label, paint_args, footprint, follow, max_tilt, sink, wobble=0.0, solid=True):
         if not footprints.is_free(x, y, footprint):
             return False
+        if mesh.get_path_name().startswith("/Game/LowPolyStudio/"):
+            paint_args = None
         normal, slope_sink = _surface_placement(x, y, terrain_features, follow, height * 0.4, max_tilt=max_tilt, rng=rng, wobble=wobble)
         transform = _prop_transform(mesh, x, y, origin_x, terrain_features, height, rng.uniform(0, 360), normal, sink + slope_sink)
         if not props.add(mesh, transform, layer, label, paint_args, solid=solid):
@@ -2975,7 +3073,8 @@ def _build_vegetation(data, tag, origin_x, terrain_features):
             hilltop_meshes[index % len(hilltop_meshes)],
             unreal.Vector(origin_x + x, y, peak), height, _rot(rng.uniform(0, 360)),
             tag, LANDMARK_TAG, "IWB_HilltopLandmark", penetration=2.0 + sink, normal=normal, ground_at=ground_at,
-            center_xy=True, **_paint(palette, "accent_foliage", "trunk_dark" if index % 3 == 0 else "trunk_light"),
+            center_xy=True, **({} if hilltop_meshes[index % len(hilltop_meshes)].get_path_name().startswith("/Game/LowPolyStudio/")
+                               else _paint(palette, "accent_foliage", "trunk_dark" if index % 3 == 0 else "trunk_light")),
         )
         hilltop_accents += 1
 
@@ -3028,13 +3127,20 @@ def _build_vegetation(data, tag, origin_x, terrain_features):
                 key = "flower_b"
             elif label in ("IWB_Grass", "IWB_FineGrass") and rng.random() < 0.4:
                 key = "grass_dry"
+            scale = rng.uniform(low, high)
+            if meshes[mesh_index].get_path_name().startswith("/Game/LowPolyStudio/"):
+                # Studio stones come in real sizes: bring them to the stock stones' 40 cm.
+                extent = meshes[mesh_index].get_bounds().box_extent
+                scale *= 40.0 / max(2.0 * max(extent.x, extent.y), 1.0)
             transform = _instance_transform(
-                meshes[mesh_index], x, y, origin_x, terrain_features, rng.uniform(low, high), rng.uniform(0, 360), follow, max_tilt, sink,
+                meshes[mesh_index], x, y, origin_x, terrain_features, scale, rng.uniform(0, 360), follow, max_tilt, sink,
             )
             batches.setdefault((mesh_index, key), []).append(transform)
             placed += 1
         for (mesh_index, key), transforms in batches.items():
-            _spawn_instances(meshes[mesh_index], transforms, tag, layer, label, **_paint(palette, key, paint_keys[1], paint_keys[2]))
+            studio_mesh = meshes[mesh_index].get_path_name().startswith("/Game/LowPolyStudio/")
+            paint = {} if studio_mesh else _paint(palette, key, paint_keys[1], paint_keys[2])
+            _spawn_instances(meshes[mesh_index], transforms, tag, layer, label, **paint)
         totals[label] = placed
     try:
         animal_count, pickup_count = _build_gameplay(data, tag, origin_x, terrain_features, footprints, fields, rng)
@@ -3201,9 +3307,25 @@ def _precipitation_mesh(weather):
     unreal.GeometryScript_AssetUtils.copy_mesh_to_static_mesh(mesh, asset, options, unreal.GeometryScriptMeshWriteLOD())
     body = asset.get_editor_property("body_setup")
     body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_SIMPLE_AS_COMPLEX)
+    # The mesh starts as a copy of the engine Plane, which brings its collision box.
+    # Falling snow must never be solid: an invisible floor over the player start
+    # left the player stuck in the air when Play began.
+    try:
+        unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem).remove_collisions(asset)
+    except Exception as error:
+        unreal.log_warning("World Builder: precipitation collision kept: {}".format(error))
     unreal.EditorAssetLibrary.set_metadata_tag(asset, "IWBVersion", MATERIAL_VERSION)
     unreal.EditorAssetLibrary.save_loaded_asset(asset, False)
     return asset
+
+
+def _install_living_sky(data, tag):
+    """In Play, the living sky takes over: time passes and the weather evolves (lowpoly_climate)."""
+    try:
+        import lowpoly_climate
+        lowpoly_climate.install(data, tag)
+    except Exception as error:
+        unreal.log_warning("World Builder: living sky skipped: {}".format(error))
 
 
 def _build_weather(data, tag, origin_x):
@@ -3218,7 +3340,9 @@ def _build_weather(data, tag, origin_x):
         actor = _spawn_mesh(_precipitation_mesh(weather), unreal.Vector(0, 0, 0), unreal.Vector(1, 1, 1),
                             unreal.Rotator(), tag, WEATHER_TAG, "IWB_" + weather)
         component = actor.get_component_by_class(unreal.StaticMeshComponent)
+        component.set_collision_profile_name("NoCollision")
         component.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
+        actor.set_actor_enable_collision(False)
         component.set_editor_property("cast_shadow", False)
         # The drops are moved to the camera by the material: never cull the mesh.
         component.set_editor_property("bounds_scale", 200.0)
@@ -3398,6 +3522,13 @@ def _apply_haze(actors, time, sun_color, haze_amount=50.0):
 
 def _apply_lighting(data, tag, origin_x):
     """Sun and sky follow the palette and Mood sliders (also used by palette recolor)."""
+    if tag == GENERATED_TAG:
+        # The living sky starts Play at the hour and in the weather chosen here.
+        try:
+            import lowpoly_climate
+            lowpoly_climate.update(data)
+        except Exception as error:
+            unreal.log_warning("World Builder: living sky not updated: {}".format(error))
     palette = _palette(data)
     sky_base, sun_base = palette["sky"], palette["sun"]
     sky_color = unreal.LinearColor(
@@ -3406,7 +3537,12 @@ def _apply_lighting(data, tag, origin_x):
         min(1.0, sky_base.b + data["sky_tint"] * 0.08),
         1.0,
     )
-    light_color = unreal.LinearColor(min(1.0, sun_base.r), min(1.0, sun_base.g), min(1.0, sun_base.b), 1.0)
+    light_color = unreal.LinearColor(
+        min(1.0, sun_base.r),
+        min(1.0, sun_base.g + data["light_tint"] * 0.08),
+        min(1.0, sun_base.b + data["light_tint"] * 0.12),
+        1.0,
+    )
     # Third Person already owns a sun and a skylight. Reuse those instead of
     # adding a second pair, which caused the "multiple directional lights" warning.
     actors = unreal.EditorLevelLibrary.get_all_level_actors()
@@ -3431,13 +3567,6 @@ def _apply_lighting(data, tag, origin_x):
             light_color = unreal.LinearColor(*(getattr(light_color, c) * (1.0 - sun_mix) + sun[i] * sun_mix for i, c in enumerate("rgb")), 1.0)
             time = dict(time, strength=time["strength"] * strength, fog=time["fog"] * fog,
                         haze=tuple(time["haze"][i] * (1.0 - haze_mix) + haze[i] * haze_mix for i in range(3)))
-        # Sun warmth tints the final colour: 0 = cool blue-white, 0.5 = as the
-        # palette and hour make it, 1 = deep orange.  (It used to add a little
-        # green and blue, so it barely showed and even cooled the light.)
-        warmth = data["light_tint"]
-        cool, warm = (0.72, 0.86, 1.25), (1.0, 0.64, 0.38)
-        side, amount = (cool, 1.0 - warmth * 2.0) if warmth < 0.5 else (warm, warmth * 2.0 - 1.0)
-        light_color = unreal.LinearColor(*(getattr(light_color, c) * (1.0 - amount + side[i] * amount) for i, c in enumerate("rgb")), 1.0)
         # UE directional lights use a small lux value here, not 10,000x the UI value.
         light_component.set_editor_property("intensity", (1.5 + data["lighting"] * 0.70) * time["strength"])
         light_component.set_light_color(light_color)
@@ -3532,6 +3661,8 @@ def _build_world(widget, preview=False, vegetation_only=False, ground=None):
         terrain_features = _build_base(data, tag, origin_x)
         _build_mountains(data, tag, origin_x, terrain_features)
         weather_count = _build_weather(data, tag, origin_x)
+        if tag == GENERATED_TAG:
+            _install_living_sky(data, tag)
         try:
             _build_ambience(data, tag, origin_x)
         except Exception as error:
@@ -4145,6 +4276,7 @@ def apply_weather(widget):
         return
     _clear_world(layers=(WEATHER_TAG,))
     _build_weather(data, GENERATED_TAG, 0.0)
+    _install_living_sky(data, GENERATED_TAG)
     _apply_lighting(data, GENERATED_TAG, 0.0)
     _status(widget, {"Clear": "Clear sky: the ground is dry again.", "Rain": "Rain: wet, shiny ground and a grey sky.",
                      "Snow": "Snow: white on every top, cold light."}.get(data["weather"], data["weather"]))
@@ -4225,6 +4357,13 @@ def refresh_plants(widget):
         _status(widget, "Refresh stopped safely: {}".format(error))
         unreal.log_error("World Builder plant refresh stopped: {}".format(error))
         return
+    # The river carved its valleys after the first plants grew: the new ones
+    # grew on the uncarved ground and floated over the riverbed and the water.
+    try:
+        import iwb_river
+        iwb_river.settle_plants()
+    except Exception as error:
+        unreal.log_warning("World Builder: new plants not settled along the river: {}".format(error))
     _save_level(widget)
 
 
