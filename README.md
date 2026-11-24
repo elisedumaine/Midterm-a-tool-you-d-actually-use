@@ -5,7 +5,7 @@
 
 Interactive World Builder is an Unreal Editor tool that builds a small, playable stylized forest from one panel. Instead of placing terrain, trees, rocks, paths, and lights one at a time, an artist picks a seed and a few settings and clicks **Build World**. The same seed and settings always give back the same world.
 
-**Demo video (1–3 min):** _link coming: add the video URL here_
+**Demo video (3 min):** https://vimeo.com/1242638803?share=copy&fl=sv&fe=ci
 
 ## Where the tool lives
 
