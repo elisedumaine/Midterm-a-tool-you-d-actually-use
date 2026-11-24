@@ -13,7 +13,7 @@ Demo video step 2 : https://vimeo.com/1249552660?share=copy&fl=sv&fe=ci
 
 ## Research Project 1 — Low-Poly Nature Kit (Nov 2026)
 
-**Research Project 1 video (1–3 min):** _link coming_
+**Research Project 1 video:** https://vimeo.com/1249552660?share=copy&fl=sv&fe=ci (the "step 2" video above)
 
 The Houdini half (HDAs, build scripts, proposal) is in
 [Research-Project-1-proposal](https://github.com/elisedumaine/Research-Project-1-proposal)
@@ -39,7 +39,11 @@ version: style + trees + rocks, baked and growing in one Unreal forest.
   in Play time passes (a day = 12 min) and the weather changes by itself: clear,
   rain, storm with lightning and thunder, sun shower with a rainbow, mist, snow,
   stars and moon at night, wind that sways the plants.
-- **Title screen + wake-up intro**, English / French choice.
+- **Gameplay** (`Source/ForestGame`): a title screen (**PLAY**, English / Français,
+  remembered between sessions), a wake-up intro (you lie in the forest at dawn after
+  the rain, then get up), and the forest game: pick up mushrooms with **E**, feed the
+  shy animals (deer, bunny, fox, boar, beaver) so they follow you, and a HUD with the
+  basket, the animals fed, and the day, hour and weather.
 
 ### How it changed, and why
 
@@ -69,8 +73,10 @@ build, judge it on screen and understand each part.
 ### What doesn't work yet
 
 - Classmates can't use the Studio straight from GitHub: the kit uses my local paths.
-- Not checked on screen yet: blowing leaves, dawn mist in the valleys, the wake-up
-  intro and the language switch (they compile, but I haven't tested them in Play).
+- Checked in Play: title screen and languages, storm with lightning, sun shower with
+  rainbow, stars. Not checked on screen yet: blowing leaves and dawn mist in the valleys.
+- After the intro you could only jump (input stayed blocked); fixed the last evening,
+  needs one more test.
 - Low-Polify only tested on a few models; photo → 3D is slow (~75 s). No LODs.
 
 ### What I'd do next
@@ -142,7 +148,7 @@ Every generated world is also a small game. Walk up to a red mushroom and press 
 ## What does not work yet
 
 - Only one biome: a **forest** (four seasons, eight palettes). Mountain, beach, and meadow worlds are not built.
-- It is an **editor tool**, not a packaged game or an in-game menu.
+- It is an **editor tool**, not a packaged game (since Research Project 1, Play has a title screen).
 - The **PCG** plugin is enabled, but placement is done in Python, not with an authored PCG graph.
 - The **river** needs Houdini open at the same time (setup in [Optional: Houdini river](#optional-houdini-river)). Without Houdini, Build World skips it and says *No river this time*. The ground grid (one point every 5.7 m) is coarser than the streams, so right after some cascades the water can sit a little above or below the ground.
 - After editing the Python code, Unreal must be **fully restarted**: it keeps the old panel callbacks in memory.
