@@ -3,6 +3,16 @@
 	"EngineAssociation": "5.8",
 	"Category": "Games",
 	"Description": "A procedural forest world-building tool for Unreal Engine.",
+	"Modules": [
+		{
+			"Name": "ForestGame",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine"
+			]
+		}
+	],
 	"Plugins": [
 		{
 			"Name": "ModelingToolsEditorMode",
@@ -38,16 +48,10 @@
 		{
 			"Name": "HoudiniEngine",
 			"Enabled": false
-		}
-	],
-	"Modules": [
+		},
 		{
-			"Name": "ForestGame",
-			"Type": "Runtime",
-			"LoadingPhase": "Default",
-			"AdditionalDependencies": [
-				"Engine"
-			]
+			"Name": "MovieRenderPipeline",
+			"Enabled": true
 		}
 	]
 }
