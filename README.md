@@ -7,6 +7,8 @@ Interactive World Builder is an Unreal Editor tool that builds a small, playable
 
 **Demo video (3 min):** https://vimeo.com/1242638803?share=copy&fl=sv&fe=ci
 
+Demo video step 2 : https://vimeo.com/1249552660?share=copy&fl=sv&fe=ci
+
 ---
 
 ## Research Project 1 — Low-Poly Nature Kit (Nov 2026)
