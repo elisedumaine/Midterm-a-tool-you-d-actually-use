@@ -11,6 +11,87 @@ Demo video step 2 : https://vimeo.com/1249552660?share=copy&fl=sv&fe=ci
 
 ---
 
+## Research Project 2 — A Living Forest (Dec 2026, in progress)
+
+The proposal is in
+[Research-Project-2-proposal](https://github.com/elisedumaine/Research-Project-2-proposal).
+The forest the World Builder makes becomes a small survival game: animals with
+needs, building, nights that are dangerous, and a forest that remembers how you
+treat it. I want it to feel different from Minecraft: you don't mine the world,
+you make friends with it.
+
+### How a game goes
+
+1. **Title screen** (Whispering Pines, 7 languages), the camera circling above the forest.
+2. **Your character**: body, head, skin, hair and its colour, beard, top, bottom
+   and shoes with their colours, or **Surprise me**. The character is cut from my
+   Houdini generator into pieces (`Content/Python/lowpoly_character_parts.py`,
+   about 220 small meshes) and painted in the game, so every mix works.
+3. **Your world**: season, weather, how round the world is (flat to tiny
+   planet), and how dangerous the nights are. Every change shows at once.
+4. **Waking up**: you fall asleep at sunset and wake up at dawn in the world you made.
+
+### What there is to do
+
+- **Gather, craft, build**: wood, stone, berries, mushrooms; a workbench, tools,
+  camp pieces, and blocks on a 1 m grid (log, plank, stone, leaves, glow, door).
+  A house with walls and a roof is "home": you can sleep there and the night
+  creatures can't reach you.
+- **Animals with a life**: deer, bunnies, foxes, boars and beavers get hungry,
+  sleep, hide from the rain and are shy. Feed them to win their trust. Tame
+  animals **help**: the bunny finds berries, the deer brings wood, the boar digs
+  up mushrooms, the beaver gnaws planks, the fox growls when a creature comes
+  (and says from where), and a tame boar or fox can chase one away.
+- **Animals move in**: a roof or a shelter becomes someone's home (a lit house
+  attracts the fox), and residents leave gifts at dawn.
+- **Nights**: red-eyed wolves and boars hunt you; they never enter firelight or
+  glow blocks. Every night survived counts, dawn gives a reward, and a new animal
+  comes to live in the forest every second night.
+- **Themed nights**, announced at dusk: fog, **red moon** (twice the creatures,
+  twice the reward), silent night (no creature, a star falls with a chest),
+  storm. The real calendar plays too: Halloween and the real full moon bring a
+  red moon, Christmas and New Year a silent night.
+- **Life of the forest** (0-100 %): cutting trees and taking wood and stone
+  lowers it; feeding, taming, planting and welcoming residents raise it. A
+  thriving forest pays more and welcomes more animals; a suffering one sends
+  more creatures. At dawn, **flowers grow** where you cared for the forest.
+- **Fireflies and the shop** (U): fireflies are earned by surviving nights,
+  taming and welcoming residents, and buy hats, a scarf, glasses or a backpack,
+  each with its colour.
+- **Seasons** turn every two days (autumn colours, winter snow and hungrier
+  animals), the weather changes by itself, and events happen: lightning,
+  earthquakes that uncover chests, shooting stars.
+- **Music that follows the forest**: title, day, dusk, night, and a danger theme
+  when red eyes are near. **Pause menu** (P): volumes, graphics, language, help.
+
+### Keys
+
+| Key | |
+| --- | --- |
+| W A S D, mouse, Space | walk, look, jump |
+| E | pick up, feed, pet, open |
+| F | a tame animal stays or follows |
+| B | camp pieces (campfire, feeder, shelter...) |
+| G / T | blocks / craft |
+| Z | sleep at home |
+| J | journal |
+| U | shop |
+| P | pause and settings |
+| H | hide the help |
+
+For tests and the presentation (console, the ` key): `Forest.Dawn`,
+`Forest.NightTheme RedMoon`, `Forest.Health 90`, `Forest.Fireflies 100`,
+`Forest.Season Autumn`, `Forest.House`, `Forest.MoveIn`.
+
+### What is tested and what isn't yet
+
+Everything builds, and the title screen, the creative pages, the music, the
+nights counter, newcomers and animals moving in were checked in Play. Not yet
+checked on screen: the colours of every character piece, the shop page, the
+red moon and the flowers. Rain still falls inside houses.
+
+---
+
 ## Research Project 1 — Low-Poly Nature Kit (Nov 2026)
 
 **Research Project 1 video:** https://vimeo.com/1249552660?share=copy&fl=sv&fe=ci (the "step 2" video above)
@@ -180,6 +261,10 @@ Every generated world is also a small game. Walk up to a red mushroom and press 
 | Startup | `Content/Python/init_unreal.py` | Unreal runs it when the project opens: it adds the **Tools** menu entry and opens the panel. |
 | River | `Content/Python/iwb_river.py` | Optional river along the valleys, made by Houdini through a local bridge. |
 | Play mode | `Source/ForestGame` | C++ actors: `AForestAnimal`, `AForestPickup`, `AForestGameManager`, `AForestHUD`, `AForestBirds`, `AForestAmbience`. |
+| Game start | `ForestStartMenu`, `ForestCreator`, `ForestLook`, `ForestIntroDirector` | Title screen, character and world pages, the character's pieces, the wake-up. |
+| The living forest | `ForestBonds`, `ForestSpirit`, `ForestNight`, `ForestSeasons`, `ForestEvents`, `ForestLife`, `ForestBlocks` | Animal help and residents, life of the forest and themed nights, night creatures, seasons, events, survival life, blocks. |
+| Menus and sound | `ForestShop`, `ForestPauseMenu`, `ForestMusic` | Shop and fireflies, pause menu and settings, music by mood. |
+| Character pieces | `Content/Python/lowpoly_character_parts.py` | Cuts the Houdini character into pieces (needs Houdini open with the bridge). |
 | Blueprints | `Content/WorldBuilder/Gameplay` | `BP_Deer`, `BP_Bunny`, `BP_Fox`, `BP_Boar`, `BP_Beaver`, `BP_MushroomPickup`, `BP_ForestBirds`, `BP_ForestAmbience`: model, animations, size, and speed of each. |
 | Panel art | `Tools/make_icons.py` | Draws the icons and palette swatches used in the panel. |
 | Dev helpers | `Tools/ue.py`, `Tools/houdini.py` | Send Python to the open Unreal editor or the open Houdini, from a terminal. |
@@ -203,6 +288,7 @@ The Houdini Engine plugin itself is **not** used (its bake step crashed the edit
 
 - Meshes: **Kenney Nature Kit**, **Kenney Fantasy Town Kit**, and **Kenney Cube Pets** (animated animals), all [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). They are included in `Content/WorldBuilder/Imported`, so nothing has to be downloaded separately.
 - Sounds, CC0, from OpenGameArt.org: [Forest Ambience](https://opengameart.org/node/23888), [Ambient Bird Sounds](https://opengameart.org/content/ambient-bird-sounds) by isaiah658, [Bird chirping sounds](https://opengameart.org/content/bird-chirping-sounds) by syncopika, [Crows singing](https://opengameart.org/content/crows-singing).
+- Music, CC0, from OpenGameArt.org: Cathedral in the forest (congusbongus), Calm Track (pmiller), Beautiful Forest (nene), Insistent (yd), Tension (Komiku). Details in [Media/Music/CREDITS.md](Media/Music/CREDITS.md).
 - The waterfall and river sounds (`S_Waterfall`, `S_River`) are synthesised by `iwb_river.py` itself (filtered noise and small rising bubbles), so they need no download or licence.
 - Unreal Engine's Third Person template provides the test character and movement.
 
