@@ -16,4 +16,5 @@ public:
 private:
 	void DrawPanel(float X, float Y, float Width, float Height, const FLinearColor& Color);
 	void DrawLine(const FString& Text, float X, float Y, float Scale, const FLinearColor& Color, bool bCentered = false);
+	void DrawAnimals(const class AForestGameManager* Manager, float UiScale);
 };

@@ -1,5 +1,6 @@
 #include "ForestSky.h"
 
+#include "ForestPauseMenu.h"
 #include "ForestLanguage.h"
 
 #include "Camera/PlayerCameraManager.h"
@@ -605,12 +606,12 @@ void AForestSky::UpdateSounds()
 {
 	if (RainSound && RainSound->IsPlaying())
 	{
-		RainSound->SetVolumeMultiplier(FMath::Max(0.001f, FMath::Pow(Mix.Rain, 0.8f) * 0.9f));
+		RainSound->SetVolumeMultiplier(FMath::Max(0.001f, FMath::Pow(Mix.Rain, 0.8f) * 0.9f * ForestSettings::NatureMultiplier()));
 	}
 	if (WindSound && WindSound->IsPlaying())
 	{
 		const float Blow = FMath::Clamp((Mix.Wind - 0.1f) / 0.9f, 0.0f, 1.0f);
-		WindSound->SetVolumeMultiplier(FMath::Max(0.001f, Blow * 0.8f));
+		WindSound->SetVolumeMultiplier(FMath::Max(0.001f, Blow * 0.8f * ForestSettings::NatureMultiplier()));
 		WindSound->SetPitchMultiplier(0.85f + 0.3f * Blow);
 	}
 }

@@ -1,5 +1,6 @@
 #include "ForestBirds.h"
 
+#include "ForestPauseMenu.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
@@ -119,7 +120,7 @@ void AForestBirds::PlayAt(USoundBase* Sound, const FVector& Location, float Volu
 	// Only in play: the editor viewport stays silent while building worlds.
 	if (Sound && GetWorld() && GetWorld()->IsGameWorld())
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, Sound, Location, FRotator::ZeroRotator, Volume, Pitch, 0.0f, Attenuation);
+		UGameplayStatics::PlaySoundAtLocation(this, Sound, Location, FRotator::ZeroRotator, Volume * ForestSettings::NatureMultiplier(), Pitch, 0.0f, Attenuation);
 	}
 }
 

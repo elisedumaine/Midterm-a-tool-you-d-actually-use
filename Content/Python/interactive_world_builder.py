@@ -177,7 +177,7 @@ TIME_ICONS = {"Golden hour": "golden_hour", "Sunset": "sunset", "Day": "sun", "B
 WEATHER_ICONS = {"Clear": "clear", "Rain": "rain", "Snow": "snow"}
 PATH_ICONS = {"None": "none", "Trail": "trail", "Network": "network"}
 SLIDER_ICONS = {
-    "Terrain": "scale", "Hills": "hills", "Vegetation": "vegetation", "ForestCover": "forest", "Wildlife": "wildlife",
+    "Terrain": "scale", "Hills": "hills", "Roundness": "scale", "Vegetation": "vegetation", "ForestCover": "forest", "Wildlife": "wildlife",
     "Lighting": "sun", "LightTint": "warmth", "SkyTint": "cloud", "GroundTint": "ground", "Haze": "haze", "Sparkles": "sparkles",
 }
 
@@ -492,6 +492,8 @@ def _slider_row(owner, panel, key, label, value, minimum, maximum, decimals=Fals
 SLIDERS = (
     ("Terrain", "terrain", "World scale", 20000.0, 3000.0, 30000.0, False),
     ("Hills", "hills", "Hills", 50.0, 0.0, 100.0, False),
+    # 0 = flat; higher bends the picture into a small planet (iwb_curved_world.py).
+    ("Roundness", "roundness", "Round world", 40.0, 0.0, 100.0, False),
     ("Vegetation", "vegetation", "Vegetation", 50.0, 0.0, 100.0, False),
     ("ForestCover", "forest_cover", "Forest cover", 50.0, 0.0, 100.0, False),
     ("Wildlife", "wildlife", "Wildlife", 50.0, 0.0, 100.0, False),
@@ -504,7 +506,7 @@ SLIDERS = (
 )
 SLIDER_SPEC = {spec[0]: spec for spec in SLIDERS}
 # Sliders that relight the existing world as soon as they are released.
-LIVE_MOOD_SLIDERS = ("Lighting", "LightTint", "SkyTint", "GroundTint", "Haze", "Sparkles")
+LIVE_MOOD_SLIDERS = ("Roundness", "Lighting", "LightTint", "SkyTint", "GroundTint", "Haze", "Sparkles")
 PATH_OPTIONS = ("None", "Trail", "Network")
 WEATHER_OPTIONS = ("Clear", "Rain", "Snow")
 
@@ -861,6 +863,7 @@ def _build_runtime_ui(widget, force=False):
     land = _section(widget, world_tab, "Land", "Land & paths", "Size, hills, and the trails through the forest.", "mountains")
     slider(land, "Terrain")
     slider(land, "Hills")
+    slider(land, "Roundness")
     _choice_row(widget, land, "PathsBox", "Paths", PATH_OPTIONS, "Network", icons=PATH_ICONS)
     _toggle_row(widget, land, "MountainsBox", "Mountains around the world", "mountains", True)
 
@@ -1094,11 +1097,18 @@ MATERIAL_VERSION = "weather-2"
 WEATHER_COLLECTION_PATH = "/Game/WorldBuilder/Materials/MPC_IWB_Weather"
 
 
+SEASON_PARAMETERS = ("Autumn", "Bare")
+# Bumped when the season part of _weather_shading changes: those materials are rebuilt.
+SEASON_VERSION = "seasons-1"
+
+
 def _weather_collection():
     """World-wide values every surface reads: Snow (white tops), Wet (dark, glossy),
-    and for the living sky Night, Clouds and Wind (plants sway)."""
+    for the living sky Night, Clouds and Wind (plants sway), and for the seasons
+    Autumn (green turns gold and red) and Bare (leaves go dull in winter)."""
     collection = unreal.load_asset(WEATHER_COLLECTION_PATH)
     if collection:
+        _add_season_parameters(collection)
         return collection
     collection = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
         "MPC_IWB_Weather", "/Game/WorldBuilder/Materials", unreal.MaterialParameterCollection,
@@ -1111,7 +1121,104 @@ def _weather_collection():
         params.append(param)
     collection.set_editor_property("scalar_parameters", params)
     unreal.EditorAssetLibrary.save_loaded_asset(collection, False)
+    _add_season_parameters(collection)
     return collection
+
+
+def _add_season_parameters(collection):
+    """Worlds made before the seasons get the two season values (0 = summer colours)."""
+    params = list(collection.get_editor_property("scalar_parameters"))
+    names = {str(param.get_editor_property("parameter_name")) for param in params}
+    missing = [name for name in SEASON_PARAMETERS if name not in names]
+    if not missing:
+        return
+    for name in missing:
+        param = unreal.CollectionScalarParameter()
+        param.set_editor_property("parameter_name", name)
+        param.set_editor_property("default_value", 0.0)
+        params.append(param)
+    collection.set_editor_property("scalar_parameters", params)
+    unreal.EditorAssetLibrary.save_loaded_asset(collection, False)
+
+
+def _season_colour(material, node, collection, base, base_output):
+    """The seasons repaint what is green: gold and red in autumn, dull brown in winter.
+
+    leaf = how green a colour is (green above both red and blue), so trunks,
+    rocks and flowers keep their colours.
+    autumn colour = gold-to-red by world position (neighbouring trees differ) x brightness
+    colour = lerp(lerp(base, autumn colour, Autumn x leaf), dull brown x brightness, Bare x leaf)"""
+    lib = unreal.MaterialEditingLibrary
+
+    def link(a, b, pin="", out=""):
+        lib.connect_material_expressions(a, out, b, pin)
+
+    autumn = node(unreal.MaterialExpressionCollectionParameter, -1500, -420, collection=collection, parameter_name="Autumn")
+    bare = node(unreal.MaterialExpressionCollectionParameter, -1500, -300, collection=collection, parameter_name="Bare")
+    red = node(unreal.MaterialExpressionComponentMask, -1500, -180, r=True, g=False, b=False, a=False)
+    green = node(unreal.MaterialExpressionComponentMask, -1500, -100, r=False, g=True, b=False, a=False)
+    blue = node(unreal.MaterialExpressionComponentMask, -1500, -20, r=False, g=False, b=True, a=False)
+    for mask in (red, green, blue):
+        link(base, mask, "", base_output)
+    other = node(unreal.MaterialExpressionMax, -1360, -100)
+    link(red, other, "A")
+    link(blue, other, "B")
+    lead = node(unreal.MaterialExpressionSubtract, -1240, -100)
+    link(green, lead, "A")
+    link(other, lead, "B")
+    boosted = node(unreal.MaterialExpressionMultiply, -1120, -100, const_b=8.0)
+    link(lead, boosted, "A")
+    leaf = node(unreal.MaterialExpressionSaturate, -1000, -100)
+    link(boosted, leaf)
+    # Brightness, so dark leaves stay darker than light ones.
+    weights = node(unreal.MaterialExpressionConstant3Vector, -1360, -240, constant=unreal.LinearColor(0.3, 0.59, 0.11, 1.0))
+    bright = node(unreal.MaterialExpressionDotProduct, -1240, -240)
+    link(base, bright, "A", base_output)
+    link(weights, bright, "B")
+    light = node(unreal.MaterialExpressionMultiply, -1120, -240, const_b=2.4)
+    link(bright, light, "A")
+    # Gold or red, changing slowly across the forest.
+    position = node(unreal.MaterialExpressionWorldPosition, -1500, -600)
+    flat = node(unreal.MaterialExpressionComponentMask, -1360, -600, r=True, g=True, b=False, a=False)
+    link(position, flat)
+    spread = node(unreal.MaterialExpressionConstant2Vector, -1360, -520, r=0.0009, g=0.0013)
+    phase = node(unreal.MaterialExpressionDotProduct, -1240, -580)
+    link(flat, phase, "A")
+    link(spread, phase, "B")
+    wave = node(unreal.MaterialExpressionSine, -1120, -580)
+    link(phase, wave)
+    half = node(unreal.MaterialExpressionMultiply, -1000, -580, const_b=0.5)
+    link(wave, half, "A")
+    shade = node(unreal.MaterialExpressionAdd, -880, -580, const_b=0.5)
+    link(half, shade, "A")
+    gold = node(unreal.MaterialExpressionConstant3Vector, -880, -700, constant=unreal.LinearColor(0.95, 0.55, 0.08, 1.0))
+    crimson = node(unreal.MaterialExpressionConstant3Vector, -880, -460, constant=unreal.LinearColor(0.85, 0.16, 0.06, 1.0))
+    hue = node(unreal.MaterialExpressionLinearInterpolate, -740, -580)
+    link(gold, hue, "A")
+    link(crimson, hue, "B")
+    link(shade, hue, "Alpha")
+    fall = node(unreal.MaterialExpressionMultiply, -620, -460)
+    link(hue, fall, "A")
+    link(light, fall, "B")
+    autumn_amount = node(unreal.MaterialExpressionMultiply, -880, -300)
+    link(autumn, autumn_amount, "A")
+    link(leaf, autumn_amount, "B")
+    turned = node(unreal.MaterialExpressionLinearInterpolate, -500, -380)
+    link(base, turned, "A", base_output)
+    link(fall, turned, "B")
+    link(autumn_amount, turned, "Alpha")
+    brown = node(unreal.MaterialExpressionConstant3Vector, -880, -200, constant=unreal.LinearColor(0.42, 0.33, 0.24, 1.0))
+    dull = node(unreal.MaterialExpressionMultiply, -620, -220)
+    link(brown, dull, "A")
+    link(light, dull, "B")
+    bare_amount = node(unreal.MaterialExpressionMultiply, -620, -120)
+    link(bare, bare_amount, "A")
+    link(leaf, bare_amount, "B")
+    season = node(unreal.MaterialExpressionLinearInterpolate, -380, -260)
+    link(turned, season, "A")
+    link(dull, season, "B")
+    link(bare_amount, season, "Alpha")
+    return season
 
 
 def _set_weather_values(snow, wet):
@@ -1163,8 +1270,9 @@ def _weather_shading(material, base, base_output=""):
     lib.connect_material_expressions(wet, "", soak, "A")
     dry = node(unreal.MaterialExpressionOneMinus, -380, 560)
     lib.connect_material_expressions(soak, "", dry, "")
+    seasoned = _season_colour(material, node, collection, base, base_output)
     darkened = node(unreal.MaterialExpressionMultiply, -260, 160)
-    lib.connect_material_expressions(base, base_output, darkened, "A")
+    lib.connect_material_expressions(seasoned, "", darkened, "A")
     lib.connect_material_expressions(dry, "", darkened, "B")
     white = node(unreal.MaterialExpressionConstant3Vector, -260, 480, constant=unreal.LinearColor(0.88, 0.92, 1.0, 1.0))
     colour = node(unreal.MaterialExpressionLinearInterpolate, -100, 200)
@@ -1259,12 +1367,19 @@ def _wind_sway(material, node, collection):
 
 
 def _material_is_current(material):
-    return unreal.EditorAssetLibrary.get_metadata_tag(material, "IWBVersion") == MATERIAL_VERSION
+    return (unreal.EditorAssetLibrary.get_metadata_tag(material, "IWBVersion") == MATERIAL_VERSION
+            and unreal.EditorAssetLibrary.get_metadata_tag(material, "IWBSeason") == SEASON_VERSION)
 
 
 def _finish_material(material):
+    try:
+        import iwb_curved_world
+        iwb_curved_world.curve_material(material, save=False)
+    except Exception as error:
+        unreal.log_warning("Round world: {}".format(error))
     unreal.MaterialEditingLibrary.recompile_material(material)
     unreal.EditorAssetLibrary.set_metadata_tag(material, "IWBVersion", MATERIAL_VERSION)
+    unreal.EditorAssetLibrary.set_metadata_tag(material, "IWBSeason", SEASON_VERSION)
     unreal.EditorAssetLibrary.save_loaded_asset(material, False)
 
 
@@ -4202,6 +4317,8 @@ def generate(widget):
     except Exception as error:
         river = "No river this time ({}).".format(error)
         unreal.log_warning("World Builder river skipped: {}".format(error))
+    # Freshly rebuilt materials get their curve back.
+    _apply_roundness(_values(widget))
     _save_level(widget, "World built and saved. " + river)
 
 
@@ -4301,6 +4418,7 @@ def _make_time_callback(widget):
 def apply_mood(widget):
     """Relight the current world and update its sparkles from the Mood tab."""
     data = _values(widget)
+    _apply_roundness(data)
     actors = unreal.EditorLevelLibrary.get_all_level_actors()
     if not any(_has_tag(actor, GENERATED_TAG) for actor in actors):
         _status(widget, "Mood saved for the next Build World.")
@@ -4318,6 +4436,16 @@ def apply_mood(widget):
                     pass
                 _paint_ambience(actor, _palette(data))
     _status(widget, "Mood updated: {}, haze {}, sparkles {}.".format(data["time_of_day"], data["haze"], data["sparkles"]))
+
+
+def _apply_roundness(data):
+    """The Round world slider: the flat world drawn as a small planet (0 = flat)."""
+    try:
+        import iwb_curved_world
+        iwb_curved_world.apply_all()
+        iwb_curved_world.set_roundness(data.get("roundness", 0.0))
+    except Exception as error:
+        unreal.log_warning("Round world skipped: {}".format(error))
 
 
 def _make_release_callback(widget):

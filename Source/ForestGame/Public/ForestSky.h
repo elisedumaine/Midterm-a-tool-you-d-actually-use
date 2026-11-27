@@ -165,6 +165,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Sky")
 	FName GetWeather() const { return Current; }
 
+	/** Real rain (not a sun shower): animals look for shelter. */
+	UFUNCTION(BlueprintPure, Category = "Sky")
+	bool IsRaining() const { return Mix.Rain > 0.45f && Mix.Sunny < 0.5f; }
+
+	UFUNCTION(BlueprintPure, Category = "Sky")
+	bool IsStorm() const { return Current == TEXT("Storm"); }
+
+	/** Between dusk and dawn. */
+	UFUNCTION(BlueprintPure, Category = "Sky")
+	bool IsNight() const { return Hour < 5.5f || Hour > 20.5f; }
+
 	/** "Day 2 · 06:40 · Mist" */
 	UFUNCTION(BlueprintPure, Category = "Sky")
 	FString Describe() const;
